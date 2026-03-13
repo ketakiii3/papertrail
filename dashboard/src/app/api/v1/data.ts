@@ -1,0 +1,210 @@
+// Realistic sample data for PaperTrail demo deployment
+
+export const companies = [
+  { id: 1, ticker: "AAPL", name: "Apple Inc.", sector: "Technology", industry: "Consumer Electronics" },
+  { id: 2, ticker: "MSFT", name: "Microsoft Corporation", sector: "Technology", industry: "Software" },
+  { id: 3, ticker: "GOOGL", name: "Alphabet Inc.", sector: "Technology", industry: "Internet Services" },
+  { id: 4, ticker: "META", name: "Meta Platforms Inc.", sector: "Technology", industry: "Social Media" },
+  { id: 5, ticker: "AMZN", name: "Amazon.com Inc.", sector: "Consumer Discretionary", industry: "E-Commerce" },
+  { id: 6, ticker: "TSLA", name: "Tesla Inc.", sector: "Consumer Discretionary", industry: "Automobiles" },
+  { id: 7, ticker: "JPM", name: "JPMorgan Chase & Co.", sector: "Financials", industry: "Banking" },
+  { id: 8, ticker: "JNJ", name: "Johnson & Johnson", sector: "Healthcare", industry: "Pharmaceuticals" },
+  { id: 9, ticker: "V", name: "Visa Inc.", sector: "Financials", industry: "Financial Services" },
+  { id: 10, ticker: "NVDA", name: "NVIDIA Corporation", sector: "Technology", industry: "Semiconductors" },
+];
+
+export const claims = [
+  // Apple claims
+  { id: 1, filing_id: 1, company_id: 1, claim_text: "We expect continued growth in our Services segment, driven by increasing subscriber counts and expanding content offerings.", claim_type: "forward-looking", topic: "revenue", sentiment: "positive", confidence: 0.92, entities: { segments: ["Services"] }, temporal_ref: "FY2025", source_section: "MD&A", claim_date: "2025-01-15" },
+  { id: 2, filing_id: 2, company_id: 1, claim_text: "Services revenue growth has moderated as subscriber acquisition costs have increased and content investments have not yielded expected returns.", claim_type: "financial", topic: "revenue", sentiment: "negative", confidence: 0.89, entities: { segments: ["Services"] }, temporal_ref: "Q2 2025", source_section: "MD&A", claim_date: "2025-07-20" },
+  { id: 3, filing_id: 1, company_id: 1, claim_text: "Our supply chain remains resilient with diversified manufacturing across multiple regions.", claim_type: "operational", topic: "supply-chain", sentiment: "positive", confidence: 0.87, entities: {}, temporal_ref: "FY2025", source_section: "Risk Factors", claim_date: "2025-01-15" },
+  { id: 4, filing_id: 3, company_id: 1, claim_text: "Supply chain disruptions in Southeast Asia have materially impacted our ability to meet demand for certain product lines.", claim_type: "risk", topic: "supply-chain", sentiment: "negative", confidence: 0.91, entities: { regions: ["Southeast Asia"] }, temporal_ref: "Q3 2025", source_section: "Risk Factors", claim_date: "2025-10-28" },
+  // Microsoft claims
+  { id: 5, filing_id: 4, company_id: 2, claim_text: "Azure cloud infrastructure investments will drive margin expansion as we achieve greater economies of scale.", claim_type: "forward-looking", topic: "margins", sentiment: "positive", confidence: 0.94, entities: { products: ["Azure"] }, temporal_ref: "FY2025", source_section: "MD&A", claim_date: "2025-02-10" },
+  { id: 6, filing_id: 5, company_id: 2, claim_text: "Increased capital expenditure requirements for AI infrastructure have resulted in near-term margin compression in our Intelligent Cloud segment.", claim_type: "financial", topic: "margins", sentiment: "negative", confidence: 0.90, entities: { segments: ["Intelligent Cloud"] }, temporal_ref: "Q2 2025", source_section: "MD&A", claim_date: "2025-07-25" },
+  { id: 7, filing_id: 4, company_id: 2, claim_text: "We do not anticipate any material impact from ongoing regulatory proceedings in the European Union.", claim_type: "legal", topic: "regulatory", sentiment: "neutral", confidence: 0.85, entities: { jurisdictions: ["EU"] }, temporal_ref: "FY2025", source_section: "Legal Proceedings", claim_date: "2025-02-10" },
+  { id: 8, filing_id: 6, company_id: 2, claim_text: "The European Commission's Digital Markets Act enforcement action could result in fines up to 10% of global revenue and require significant changes to our product bundling.", claim_type: "risk", topic: "regulatory", sentiment: "negative", confidence: 0.93, entities: { jurisdictions: ["EU"], regulations: ["DMA"] }, temporal_ref: "Q3 2025", source_section: "Risk Factors", claim_date: "2025-10-15" },
+  // Tesla claims
+  { id: 9, filing_id: 7, company_id: 6, claim_text: "We are on track to achieve full self-driving capability by end of year, with our neural network approach showing exponential improvement.", claim_type: "forward-looking", topic: "autonomous-driving", sentiment: "positive", confidence: 0.88, entities: { products: ["FSD"] }, temporal_ref: "2025", source_section: "Business Overview", claim_date: "2025-03-01" },
+  { id: 10, filing_id: 8, company_id: 6, claim_text: "Achieving full autonomy remains subject to significant technical challenges and regulatory approval timelines that are difficult to predict.", claim_type: "risk", topic: "autonomous-driving", sentiment: "negative", confidence: 0.86, entities: { products: ["FSD"] }, temporal_ref: "Q3 2025", source_section: "Risk Factors", claim_date: "2025-10-20" },
+  { id: 11, filing_id: 7, company_id: 6, claim_text: "Vehicle production costs continue to decline as manufacturing efficiencies improve at all gigafactory locations.", claim_type: "operational", topic: "costs", sentiment: "positive", confidence: 0.91, entities: {}, temporal_ref: "FY2025", source_section: "MD&A", claim_date: "2025-03-01" },
+  { id: 12, filing_id: 8, company_id: 6, claim_text: "Raw material cost increases and the need for additional warranty reserves have offset manufacturing efficiency gains.", claim_type: "financial", topic: "costs", sentiment: "negative", confidence: 0.88, entities: {}, temporal_ref: "Q3 2025", source_section: "MD&A", claim_date: "2025-10-20" },
+  // Meta claims
+  { id: 13, filing_id: 9, company_id: 4, claim_text: "Our metaverse investments through Reality Labs are creating the foundation for the next major computing platform.", claim_type: "forward-looking", topic: "metaverse", sentiment: "positive", confidence: 0.82, entities: { segments: ["Reality Labs"] }, temporal_ref: "FY2025", source_section: "Business Overview", claim_date: "2025-02-05" },
+  { id: 14, filing_id: 10, company_id: 4, claim_text: "Reality Labs operating losses widened to $4.5B this quarter as consumer adoption of VR/AR devices remains below internal projections.", claim_type: "financial", topic: "metaverse", sentiment: "negative", confidence: 0.95, entities: { segments: ["Reality Labs"] }, temporal_ref: "Q3 2025", source_section: "Financial Statements", claim_date: "2025-10-30" },
+  // JPMorgan claims
+  { id: 15, filing_id: 11, company_id: 7, claim_text: "Our credit quality remains strong with delinquency rates at historically low levels across consumer and commercial portfolios.", claim_type: "financial", topic: "credit-quality", sentiment: "positive", confidence: 0.93, entities: {}, temporal_ref: "FY2024", source_section: "MD&A", claim_date: "2025-01-20" },
+  { id: 16, filing_id: 12, company_id: 7, claim_text: "Net charge-offs in consumer credit cards increased 45% year-over-year, reflecting deteriorating consumer credit conditions.", claim_type: "financial", topic: "credit-quality", sentiment: "negative", confidence: 0.96, entities: { products: ["consumer credit cards"] }, temporal_ref: "Q3 2025", source_section: "Financial Statements", claim_date: "2025-10-12" },
+  // NVIDIA claims
+  { id: 17, filing_id: 13, company_id: 10, claim_text: "Data center revenue will continue its strong growth trajectory as AI training and inference demand exceeds available GPU supply.", claim_type: "forward-looking", topic: "revenue", sentiment: "positive", confidence: 0.95, entities: { segments: ["Data Center"] }, temporal_ref: "FY2026", source_section: "MD&A", claim_date: "2025-03-15" },
+  { id: 18, filing_id: 14, company_id: 10, claim_text: "Export restrictions to China have reduced our total addressable market by approximately 15%, impacting data center revenue growth projections.", claim_type: "risk", topic: "revenue", sentiment: "negative", confidence: 0.92, entities: { regions: ["China"] }, temporal_ref: "Q2 2025", source_section: "Risk Factors", claim_date: "2025-08-20" },
+  // Amazon claims
+  { id: 19, filing_id: 15, company_id: 5, claim_text: "AWS operating margins are expected to expand as customers complete cloud migrations and move to higher-value managed services.", claim_type: "forward-looking", topic: "margins", sentiment: "positive", confidence: 0.90, entities: { segments: ["AWS"] }, temporal_ref: "FY2025", source_section: "MD&A", claim_date: "2025-02-01" },
+  { id: 20, filing_id: 16, company_id: 5, claim_text: "Aggressive pricing from competitors and increased spending on custom silicon have pressured AWS margins below our target range.", claim_type: "financial", topic: "margins", sentiment: "negative", confidence: 0.88, entities: { segments: ["AWS"] }, temporal_ref: "Q3 2025", source_section: "MD&A", claim_date: "2025-10-25" },
+];
+
+export const contradictions = [
+  {
+    id: 1,
+    claim_a_id: 1, claim_b_id: 2, company_id: 1,
+    similarity_score: 0.87,
+    nli_contradiction_score: 0.92,
+    severity: "high" as const,
+    time_gap_days: 186,
+    explanation: "Apple projected continued Services growth in their 10-K but later reported moderation due to rising subscriber acquisition costs.",
+    created_at: "2025-07-21T10:30:00Z",
+  },
+  {
+    id: 2,
+    claim_a_id: 3, claim_b_id: 4, company_id: 1,
+    similarity_score: 0.83,
+    nli_contradiction_score: 0.89,
+    severity: "critical" as const,
+    time_gap_days: 286,
+    explanation: "Apple claimed supply chain resilience, but later disclosed material disruptions in Southeast Asia affecting product availability.",
+    created_at: "2025-10-29T08:15:00Z",
+  },
+  {
+    id: 3,
+    claim_a_id: 5, claim_b_id: 6, company_id: 2,
+    similarity_score: 0.91,
+    nli_contradiction_score: 0.94,
+    severity: "high" as const,
+    time_gap_days: 165,
+    explanation: "Microsoft predicted Azure margin expansion but reported margin compression due to AI infrastructure capital expenditure.",
+    created_at: "2025-07-26T14:20:00Z",
+  },
+  {
+    id: 4,
+    claim_a_id: 7, claim_b_id: 8, company_id: 2,
+    similarity_score: 0.85,
+    nli_contradiction_score: 0.91,
+    severity: "critical" as const,
+    time_gap_days: 247,
+    explanation: "Microsoft dismissed EU regulatory risk, then disclosed potential fines up to 10% of global revenue under the DMA.",
+    created_at: "2025-10-16T09:45:00Z",
+  },
+  {
+    id: 5,
+    claim_a_id: 9, claim_b_id: 10, company_id: 6,
+    similarity_score: 0.89,
+    nli_contradiction_score: 0.87,
+    severity: "high" as const,
+    time_gap_days: 233,
+    explanation: "Tesla projected full self-driving by year-end but later acknowledged significant technical challenges and unpredictable timelines.",
+    created_at: "2025-10-21T11:00:00Z",
+  },
+  {
+    id: 6,
+    claim_a_id: 11, claim_b_id: 12, company_id: 6,
+    similarity_score: 0.86,
+    nli_contradiction_score: 0.84,
+    severity: "medium" as const,
+    time_gap_days: 233,
+    explanation: "Tesla claimed declining production costs, but later disclosed raw material increases and warranty reserves offsetting gains.",
+    created_at: "2025-10-21T11:30:00Z",
+  },
+  {
+    id: 7,
+    claim_a_id: 13, claim_b_id: 14, company_id: 4,
+    similarity_score: 0.82,
+    nli_contradiction_score: 0.88,
+    severity: "high" as const,
+    time_gap_days: 267,
+    explanation: "Meta positioned Reality Labs as building the next computing platform, but losses widened with consumer adoption below projections.",
+    created_at: "2025-10-31T16:00:00Z",
+  },
+  {
+    id: 8,
+    claim_a_id: 15, claim_b_id: 16, company_id: 7,
+    similarity_score: 0.90,
+    nli_contradiction_score: 0.95,
+    severity: "critical" as const,
+    time_gap_days: 265,
+    explanation: "JPMorgan declared strong credit quality with historically low delinquencies, then reported 45% YoY increase in consumer credit card charge-offs.",
+    created_at: "2025-10-13T07:30:00Z",
+  },
+  {
+    id: 9,
+    claim_a_id: 17, claim_b_id: 18, company_id: 10,
+    similarity_score: 0.84,
+    nli_contradiction_score: 0.86,
+    severity: "medium" as const,
+    time_gap_days: 158,
+    explanation: "NVIDIA projected strong data center growth but disclosed 15% addressable market reduction due to China export restrictions.",
+    created_at: "2025-08-21T13:15:00Z",
+  },
+  {
+    id: 10,
+    claim_a_id: 19, claim_b_id: 20, company_id: 5,
+    similarity_score: 0.88,
+    nli_contradiction_score: 0.90,
+    severity: "high" as const,
+    time_gap_days: 266,
+    explanation: "Amazon expected AWS margin expansion from cloud migrations, but reported margin pressure from competitive pricing and custom silicon costs.",
+    created_at: "2025-10-26T10:00:00Z",
+  },
+];
+
+export const filings = [
+  { id: 1, company_id: 1, form_type: "10-K", filed_at: "2025-01-15", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 47 },
+  { id: 2, company_id: 1, form_type: "10-Q", filed_at: "2025-07-20", period_of_report: "2025-06-30", url: "https://sec.gov/", claim_count: 32 },
+  { id: 3, company_id: 1, form_type: "10-Q", filed_at: "2025-10-28", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 29 },
+  { id: 4, company_id: 2, form_type: "10-K", filed_at: "2025-02-10", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 53 },
+  { id: 5, company_id: 2, form_type: "10-Q", filed_at: "2025-07-25", period_of_report: "2025-06-30", url: "https://sec.gov/", claim_count: 38 },
+  { id: 6, company_id: 2, form_type: "10-Q", filed_at: "2025-10-15", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 41 },
+  { id: 7, company_id: 6, form_type: "10-K", filed_at: "2025-03-01", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 39 },
+  { id: 8, company_id: 6, form_type: "10-Q", filed_at: "2025-10-20", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 34 },
+  { id: 9, company_id: 4, form_type: "10-K", filed_at: "2025-02-05", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 45 },
+  { id: 10, company_id: 4, form_type: "10-Q", filed_at: "2025-10-30", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 37 },
+  { id: 11, company_id: 7, form_type: "10-K", filed_at: "2025-01-20", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 61 },
+  { id: 12, company_id: 7, form_type: "10-Q", filed_at: "2025-10-12", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 44 },
+  { id: 13, company_id: 10, form_type: "10-K", filed_at: "2025-03-15", period_of_report: "2025-01-31", url: "https://sec.gov/", claim_count: 42 },
+  { id: 14, company_id: 10, form_type: "10-Q", filed_at: "2025-08-20", period_of_report: "2025-07-31", url: "https://sec.gov/", claim_count: 36 },
+  { id: 15, company_id: 5, form_type: "10-K", filed_at: "2025-02-01", period_of_report: "2024-12-31", url: "https://sec.gov/", claim_count: 58 },
+  { id: 16, company_id: 5, form_type: "10-Q", filed_at: "2025-10-25", period_of_report: "2025-09-30", url: "https://sec.gov/", claim_count: 40 },
+];
+
+// Helper to build contradiction responses with full claim data
+export function buildContradictionResponse(c: typeof contradictions[0]) {
+  const company = companies.find((co) => co.id === c.company_id)!;
+  const claimA = claims.find((cl) => cl.id === c.claim_a_id)!;
+  const claimB = claims.find((cl) => cl.id === c.claim_b_id)!;
+  return {
+    id: c.id,
+    company_ticker: company.ticker,
+    company_name: company.name,
+    claim_a: {
+      id: claimA.id,
+      filing_id: claimA.filing_id,
+      claim_text: claimA.claim_text,
+      claim_type: claimA.claim_type,
+      topic: claimA.topic,
+      sentiment: claimA.sentiment,
+      confidence: claimA.confidence,
+      entities: claimA.entities,
+      temporal_ref: claimA.temporal_ref,
+      source_section: claimA.source_section,
+      claim_date: claimA.claim_date,
+    },
+    claim_b: {
+      id: claimB.id,
+      filing_id: claimB.filing_id,
+      claim_text: claimB.claim_text,
+      claim_type: claimB.claim_type,
+      topic: claimB.topic,
+      sentiment: claimB.sentiment,
+      confidence: claimB.confidence,
+      entities: claimB.entities,
+      temporal_ref: claimB.temporal_ref,
+      source_section: claimB.source_section,
+      claim_date: claimB.claim_date,
+    },
+    similarity_score: c.similarity_score,
+    nli_contradiction_score: c.nli_contradiction_score,
+    severity: c.severity,
+    time_gap_days: c.time_gap_days,
+    explanation: c.explanation,
+    created_at: c.created_at,
+  };
+}

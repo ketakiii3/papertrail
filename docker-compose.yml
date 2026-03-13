@@ -1,0 +1,131 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: papertrail
+      POSTGRES_PASSWORD: papertrail
+      POSTGRES_DB: papertrail
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U papertrail"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/papertrail123
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+
+  edgar-ingester:
+    build:
+      context: .
+      dockerfile: services/edgar-ingester/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  claim-extractor:
+    build:
+      context: .
+      dockerfile: services/claim-extractor/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  contradiction-detector:
+    build:
+      context: .
+      dockerfile: services/contradiction-detector/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  graph-builder:
+    build:
+      context: .
+      dockerfile: services/graph-builder/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      neo4j: { condition: service_started }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  transcript-ingester:
+    build:
+      context: .
+      dockerfile: services/transcript-ingester/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  api-server:
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-server
+    environment:
+      NEXT_PUBLIC_API_URL: http://api-server:8000
+      NEXT_PUBLIC_WS_URL: ws://api-server:8000
+
+volumes:
+  postgres-data:
+  redis-data:
+  neo4j-data:
+
+networks:
+  default:
+    name: papertrail-net
