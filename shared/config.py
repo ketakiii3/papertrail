@@ -10,8 +10,8 @@ class Settings:
     EDGAR_USER_AGENT: str = os.getenv("EDGAR_USER_AGENT", "PaperTrail research@papertrail.dev")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://ollama:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "mistral")
 
 
 settings = Settings()

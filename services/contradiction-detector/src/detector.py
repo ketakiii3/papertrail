@@ -5,8 +5,9 @@ import sys
 
 sys.path.insert(0, "/app")
 
-from shared.db import get_pool, get_similar_claims, insert_contradiction
+from shared.db import get_pool, get_similar_claims, get_company_by_id, insert_contradiction
 from shared.redis_client import publish_event, create_consumer_group, consume_events
+from shared.llm import generate_reasoning, ensure_model_available
 from .nli_scorer import score_pairs, classify_severity
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,11 @@ MAX_CANDIDATES = 20
 async def detect_contradictions_for_filing(filing_id: int, company_id: int):
     """Find contradictions between new claims and historical claims."""
     pool = await get_pool()
+    company = await get_company_by_id(company_id)
 
     # Get new claims from this filing
     new_claims = await pool.fetch(
-        """SELECT id, claim_text, claim_type, topic, embedding, claim_date
+        """SELECT id, claim_text, claim_type, topic, embedding, claim_date, source_section
            FROM claims
            WHERE filing_id = $1 AND embedding IS NOT NULL""",
         filing_id,
@@ -87,6 +89,21 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
                 else:
                     claim_a_id, claim_b_id = candidate["id"], claim["id"]
 
+                # Generate LLM agent reasoning
+                agent_reasoning = await generate_reasoning(
+                    company_name=company["name"] if company else "Unknown",
+                    ticker=company["ticker"] if company else "???",
+                    claim_a=candidate["claim_text"],
+                    claim_b=claim["claim_text"],
+                    date_a=str(candidate["claim_date"]) if candidate["claim_date"] else None,
+                    date_b=str(claim["claim_date"]) if claim["claim_date"] else None,
+                    section_a=candidate.get("source_section"),
+                    section_b=claim.get("source_section"),
+                    severity=severity,
+                    nli_score=nli_result["contradiction"],
+                    time_gap=time_gap,
+                )
+
                 contra_id = await insert_contradiction(
                     claim_a_id=claim_a_id,
                     claim_b_id=claim_b_id,
@@ -96,6 +113,7 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
                     severity=severity,
                     time_gap_days=time_gap,
                     explanation=explanation,
+                    agent_reasoning=agent_reasoning,
                 )
 
                 # Publish event
@@ -125,6 +143,10 @@ async def run_consumer():
     consumer = "detector-1"
 
     await create_consumer_group(stream, group)
+
+    # Ensure LLM model is available for agent reasoning
+    await ensure_model_available()
+
     logger.info(f"Listening on stream '{stream}' as {group}/{consumer}")
 
     while True:

@@ -105,15 +105,17 @@ async def get_similar_claims(embedding_str: str, company_id: int, exclude_filing
 async def insert_contradiction(claim_a_id: int, claim_b_id: int, company_id: int,
                                 similarity_score: float, nli_score: float,
                                 severity: str, time_gap_days: int = None,
-                                explanation: str = None) -> int:
+                                explanation: str = None,
+                                agent_reasoning: str = None) -> int:
     pool = await get_pool()
     row = await pool.fetchrow(
         """INSERT INTO contradictions (claim_a_id, claim_b_id, company_id,
                                        similarity_score, nli_contradiction_score,
-                                       severity, time_gap_days, explanation)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                       severity, time_gap_days, explanation,
+                                       agent_reasoning)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id""",
         claim_a_id, claim_b_id, company_id, similarity_score, nli_score,
-        severity, time_gap_days, explanation
+        severity, time_gap_days, explanation, agent_reasoning
     )
     return row["id"]

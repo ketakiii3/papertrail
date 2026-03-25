@@ -47,6 +47,7 @@ class ContradictionResponse(BaseModel):
     severity: str
     time_gap_days: Optional[int] = None
     explanation: Optional[str] = None
+    agent_reasoning: Optional[str] = None
     created_at: Optional[datetime] = None
 
 

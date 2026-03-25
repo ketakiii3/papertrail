@@ -1,5 +1,6 @@
 """Search and global contradiction endpoints."""
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -7,31 +8,68 @@ from fastapi import APIRouter, Query
 from shared.db import get_pool
 from src.schemas import ContradictionResponse, ClaimResponse, SearchResult, StatsResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
+
+# Lazy-loaded embedding model for semantic search
+_embed_model = None
+
+
+def _get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        logger.info("Loading embedding model for search...")
+        _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embed_model
 
 
 @router.get("/search/claims", response_model=list[SearchResult])
 async def search_claims(
     q: str = Query(..., min_length=3, description="Search query"),
     limit: int = Query(20, le=100),
+    mode: str = Query("semantic", description="Search mode: 'semantic' or 'text'"),
 ):
-    """Semantic search across all claims using pgvector similarity."""
+    """Search across all claims. Supports semantic (vector) and text (ILIKE) modes."""
     pool = await get_pool()
 
-    # For MVP, use text search. Full semantic search requires embedding the query.
-    rows = await pool.fetch(
-        """SELECT c.id, c.filing_id, c.claim_text, c.claim_type, c.topic,
-                  c.sentiment, c.confidence, c.entities, c.temporal_ref,
-                  c.source_section, c.claim_date,
-                  co.ticker,
-                  1.0 as similarity
-           FROM claims c
-           JOIN companies co ON co.id = c.company_id
-           WHERE c.claim_text ILIKE $1
-           ORDER BY c.claim_date DESC NULLS LAST
-           LIMIT $2""",
-        f"%{q}%", limit,
-    )
+    if mode == "semantic":
+        try:
+            model = _get_embed_model()
+            query_embedding = model.encode(q).tolist()
+            embedding_str = str(query_embedding)
+
+            rows = await pool.fetch(
+                """SELECT c.id, c.filing_id, c.claim_text, c.claim_type, c.topic,
+                          c.sentiment, c.confidence, c.entities, c.temporal_ref,
+                          c.source_section, c.claim_date,
+                          co.ticker,
+                          1 - (c.embedding <=> $1::vector) AS similarity
+                   FROM claims c
+                   JOIN companies co ON co.id = c.company_id
+                   WHERE c.embedding IS NOT NULL
+                   ORDER BY c.embedding <=> $1::vector
+                   LIMIT $2""",
+                embedding_str, limit,
+            )
+        except Exception as e:
+            logger.warning(f"Semantic search failed, falling back to text: {e}")
+            mode = "text"
+
+    if mode == "text":
+        rows = await pool.fetch(
+            """SELECT c.id, c.filing_id, c.claim_text, c.claim_type, c.topic,
+                      c.sentiment, c.confidence, c.entities, c.temporal_ref,
+                      c.source_section, c.claim_date,
+                      co.ticker,
+                      1.0 as similarity
+               FROM claims c
+               JOIN companies co ON co.id = c.company_id
+               WHERE c.claim_text ILIKE $1
+               ORDER BY c.claim_date DESC NULLS LAST
+               LIMIT $2""",
+            f"%{q}%", limit,
+        )
 
     results = []
     for r in rows:
@@ -43,7 +81,7 @@ async def search_claims(
                 temporal_ref=r["temporal_ref"], source_section=r["source_section"],
                 claim_date=r["claim_date"],
             ),
-            similarity=r["similarity"],
+            similarity=float(r["similarity"]),
             company_ticker=r["ticker"],
         ))
 
@@ -60,7 +98,8 @@ async def get_latest_contradictions(
 
     query = """
         SELECT con.id, con.similarity_score, con.nli_contradiction_score,
-               con.severity, con.time_gap_days, con.explanation, con.created_at,
+               con.severity, con.time_gap_days, con.explanation, con.agent_reasoning,
+               con.created_at,
                co.ticker, co.name as company_name,
                ca.id as ca_id, ca.filing_id as ca_filing_id, ca.claim_text as ca_text,
                ca.claim_type as ca_type, ca.topic as ca_topic, ca.sentiment as ca_sentiment,
@@ -115,6 +154,7 @@ async def get_latest_contradictions(
             severity=r["severity"],
             time_gap_days=r["time_gap_days"],
             explanation=r["explanation"],
+            agent_reasoning=r["agent_reasoning"],
             created_at=r["created_at"],
         ))
 

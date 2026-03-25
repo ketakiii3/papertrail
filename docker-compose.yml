@@ -40,6 +40,18 @@ services:
     volumes:
       - neo4j-data:/data
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   edgar-ingester:
     build:
       context: .
@@ -69,6 +81,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      ollama: { condition: service_healthy }
     env_file: .env
     volumes:
       - ./shared:/app/shared
@@ -125,6 +138,7 @@ volumes:
   postgres-data:
   redis-data:
   neo4j-data:
+  ollama-data:
 
 networks:
   default:

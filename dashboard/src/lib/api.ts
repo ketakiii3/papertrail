@@ -39,6 +39,7 @@ export interface Contradiction {
   severity: "low" | "medium" | "high" | "critical";
   time_gap_days: number | null;
   explanation: string | null;
+  agent_reasoning: string | null;
   created_at: string | null;
 }
 
