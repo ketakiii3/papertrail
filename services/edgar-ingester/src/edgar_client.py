@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # SEC EDGAR rate limit: 10 requests per second
 RATE_LIMIT = 10
 BASE_URL = "https://data.sec.gov"
+ARCHIVES_URL = "https://www.sec.gov"
 EFTS_URL = "https://efts.sec.gov/LATEST"
 
 
@@ -73,7 +74,8 @@ class EdgarClient:
             accession = accessions[i]
             accession_no_dash = accession.replace("-", "")
             primary_doc = primary_docs[i] if i < len(primary_docs) else ""
-            doc_url = f"{BASE_URL}/Archives/edgar/data/{cik_padded}/{accession_no_dash}/{primary_doc}"
+            cik_stripped = cik.lstrip("0") or "0"
+            doc_url = f"{ARCHIVES_URL}/Archives/edgar/data/{cik_stripped}/{accession_no_dash}/{primary_doc}"
 
             filing = {
                 "accession_number": accession,
