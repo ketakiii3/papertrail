@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from shared.db import get_pool, close_pool
 from shared.redis_client import get_redis, close_redis
@@ -46,6 +47,12 @@ app.include_router(search.router)
 app.include_router(watchlist.router)
 app.include_router(ws.router)
 app.include_router(filings.router)
+
+
+@app.get("/")
+async def root():
+    """Avoid a bare 404 when opening http://localhost:8000/ in the browser."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")

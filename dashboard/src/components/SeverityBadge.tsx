@@ -1,10 +1,11 @@
 "use client";
 
 const SEVERITY_STYLES = {
-  critical: "bg-red-500/15 text-red-400 border-red-500/30 glow-red",
-  high: "bg-orange-500/15 text-orange-400 border-orange-500/30 glow-orange",
-  medium: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30 glow-yellow",
-  low: "bg-green-500/15 text-green-400 border-green-500/30 glow-green",
+  critical:
+    "bg-red-950/50 text-red-300 border-red-800/40",
+  high: "bg-orange-950/50 text-orange-300 border-orange-800/40",
+  medium: "bg-yellow-950/50 text-yellow-200 border-yellow-800/40",
+  low: "bg-emerald-950/50 text-emerald-300 border-emerald-800/40",
 } as const;
 
 export default function SeverityBadge({
@@ -18,7 +19,7 @@ export default function SeverityBadge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider ${style}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${style}`}
     >
       {severity}
     </span>

@@ -1,9 +1,10 @@
 """API response schemas."""
 
+import json
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class CompanyResponse(BaseModel):
@@ -30,10 +31,39 @@ class ClaimResponse(BaseModel):
     topic: Optional[str] = None
     sentiment: Optional[str] = None
     confidence: Optional[float] = None
-    entities: Optional[dict] = None
+    # JSONB may decode as dict, list, or nested structures — avoid 500 on response validation
+    entities: Optional[Any] = None
     temporal_ref: Optional[str] = None
     source_section: Optional[str] = None
     claim_date: Optional[date] = None
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _confidence_to_float(cls, v):
+        if v is None:
+            return None
+        return float(v)
+
+    @field_validator("entities", mode="before")
+    @classmethod
+    def _entities_from_db(cls, v):
+        # asyncpg sometimes returns JSONB as str depending on driver/column typing
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            try:
+                parsed = json.loads(s)
+                return parsed if isinstance(parsed, (dict, list)) else {"value": parsed}
+            except json.JSONDecodeError:
+                return {"raw": s}
+        return v
 
 
 class ContradictionResponse(BaseModel):
@@ -49,6 +79,11 @@ class ContradictionResponse(BaseModel):
     explanation: Optional[str] = None
     agent_reasoning: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    @field_validator("similarity_score", "nli_contradiction_score", mode="before")
+    @classmethod
+    def _scores_to_float(cls, v):
+        return float(v) if v is not None else 0.0
 
 
 class TimelineEvent(BaseModel):

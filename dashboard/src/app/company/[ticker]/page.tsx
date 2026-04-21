@@ -53,9 +53,9 @@ export default function CompanyPage() {
 
   if (error) {
     return (
-      <div className="glass rounded-xl p-12 text-center">
-        <p className="text-red-400">{error}</p>
-        <a href="/" className="mt-4 inline-block text-brand-400 hover:underline">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-14 text-center">
+        <p className="text-severity-critical text-[14px]">{error}</p>
+        <a href="/" className="mt-4 inline-block text-[13px] text-accent-500 underline underline-offset-2 decoration-accent-200 hover:decoration-accent-400">
           Back to Dashboard
         </a>
       </div>
@@ -63,42 +63,42 @@ export default function CompanyPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Company Header */}
       <div className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-600/20 text-xl font-bold text-brand-400">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--bg-secondary)] font-serif text-xl text-warm-600">
           {ticker.slice(0, 2)}
         </div>
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="font-serif text-2xl font-normal text-warm-950">
             {company?.name || ticker}
           </h1>
-          <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
-            <span className="font-mono">{ticker}</span>
+          <div className="flex items-center gap-2.5 text-[13px] text-[var(--text-secondary)]">
+            <span className="font-mono text-[12px] font-medium">{ticker}</span>
             {company?.sector && (
               <>
-                <span>&middot;</span>
+                <span className="text-[var(--text-muted)]">&middot;</span>
                 <span>{company.sector}</span>
               </>
             )}
-            <span>&middot;</span>
+            <span className="text-[var(--text-muted)]">&middot;</span>
             <span>{contradictions.length} contradictions</span>
-            <span>&middot;</span>
+            <span className="text-[var(--text-muted)]">&middot;</span>
             <span>{claims.length} claims</span>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-white/[0.04] p-1">
+      <div className="flex gap-2">
         {(["timeline", "contradictions", "claims"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium capitalize transition-colors ${
+            className={`rounded-full px-4 py-1.5 text-[13px] font-medium capitalize transition-colors ${
               tab === t
-                ? "bg-white/10 text-white"
-                : "text-[var(--text-secondary)] hover:text-white"
+                ? "bg-warm-800 text-warm-50"
+                : "bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-warm-200 hover:text-warm-700"
             }`}
           >
             {t}
@@ -112,9 +112,9 @@ export default function CompanyPage() {
       )}
 
       {tab === "contradictions" && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {contradictions.length === 0 ? (
-            <p className="text-center text-sm text-[var(--text-secondary)] py-12">
+            <p className="text-center text-[14px] text-[var(--text-secondary)] py-14">
               No contradictions found for {ticker}
             </p>
           ) : (
@@ -128,14 +128,14 @@ export default function CompanyPage() {
       {tab === "claims" && (
         <div className="space-y-2">
           {claims.length === 0 ? (
-            <p className="text-center text-sm text-[var(--text-secondary)] py-12">
+            <p className="text-center text-[14px] text-[var(--text-secondary)] py-14">
               No claims extracted for {ticker}
             </p>
           ) : (
-            <div className="glass rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-white/5 text-left text-xs text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border)] text-left text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Claim</th>
                     <th className="px-4 py-3">Type</th>
@@ -147,35 +147,35 @@ export default function CompanyPage() {
                   {claims.map((claim) => (
                     <tr
                       key={claim.id}
-                      className="border-b border-white/[0.03] hover:bg-white/[0.02]"
+                      className="border-b border-[var(--border)]/50 transition-colors hover:bg-[var(--bg-secondary)]"
                     >
-                      <td className="px-4 py-3 text-xs text-[var(--text-secondary)] whitespace-nowrap">
-                        {claim.claim_date || "—"}
+                      <td className="px-4 py-3 text-[12px] text-[var(--text-muted)] whitespace-nowrap">
+                        {claim.claim_date || "\u2014"}
                       </td>
                       <td className="px-4 py-3 max-w-md">
-                        <p className="line-clamp-2">{claim.claim_text}</p>
+                        <p className="line-clamp-2 text-warm-700 leading-relaxed">{claim.claim_text}</p>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="rounded bg-white/5 px-2 py-0.5 text-xs">
-                          {claim.claim_type || "—"}
+                        <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                          {claim.claim_type || "\u2014"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="rounded bg-white/5 px-2 py-0.5 text-xs">
-                          {claim.topic || "—"}
+                        <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                          {claim.topic || "\u2014"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded px-2 py-0.5 text-xs ${
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
                             claim.sentiment === "positive"
-                              ? "bg-green-500/10 text-green-400"
+                              ? "border-emerald-800/50 bg-emerald-950/50 text-emerald-300"
                               : claim.sentiment === "negative"
-                                ? "bg-red-500/10 text-red-400"
-                                : "bg-gray-500/10 text-gray-400"
+                                ? "border-red-800/50 bg-red-950/50 text-red-300"
+                                : "border-[var(--border)] text-[var(--text-muted)]"
                           }`}
                         >
-                          {claim.sentiment || "—"}
+                          {claim.sentiment || "\u2014"}
                         </span>
                       </td>
                     </tr>

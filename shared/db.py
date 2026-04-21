@@ -102,6 +102,26 @@ async def get_similar_claims(embedding_str: str, company_id: int, exclude_filing
     return [dict(r) for r in rows]
 
 
+async def get_insider_transactions_between(
+    company_id: int, start_date, end_date
+) -> list[dict]:
+    """Form 4 insider rows with transaction_date in [start_date, end_date] (inclusive)."""
+    pool = await get_pool()
+    rows = await pool.fetch(
+        """SELECT id, insider_name, insider_title, transaction_type, shares, price,
+                  total_value, transaction_date, filing_date
+           FROM insider_transactions
+           WHERE company_id = $1
+             AND transaction_date >= $2
+             AND transaction_date <= $3
+           ORDER BY transaction_date DESC""",
+        company_id,
+        start_date,
+        end_date,
+    )
+    return [dict(r) for r in rows]
+
+
 async def insert_contradiction(claim_a_id: int, claim_b_id: int, company_id: int,
                                 similarity_score: float, nli_score: float,
                                 severity: str, time_gap_days: int = None,

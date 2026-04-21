@@ -7,25 +7,40 @@ sys.path.insert(0, "/app")
 
 from shared.db import get_pool, get_similar_claims, get_company_by_id, insert_contradiction
 from shared.redis_client import publish_event, create_consumer_group, consume_events
-from shared.llm import generate_reasoning, ensure_model_available
-from .nli_scorer import score_pairs, classify_severity
+from shared.llm import ensure_model_available
+
+from .agent import evaluate_contradiction_pair
 
 logger = logging.getLogger(__name__)
 
-# Thresholds
+# Candidate retrieval (vector)
 SIMILARITY_THRESHOLD = 0.5
-NLI_CONTRADICTION_THRESHOLD = 0.6
 MAX_CANDIDATES = 20
 
 
+def _claim_row(row) -> dict:
+    return {
+        "id": row["id"],
+        "claim_text": row["claim_text"],
+        "claim_type": row.get("claim_type"),
+        "topic": row.get("topic"),
+        "embedding": row.get("embedding"),
+        "claim_date": row.get("claim_date"),
+        "source_section": row.get("source_section"),
+        "entities": row.get("entities"),
+    }
+
+
 async def detect_contradictions_for_filing(filing_id: int, company_id: int):
-    """Find contradictions between new claims and historical claims."""
+    """Find contradictions between new claims and historical claims (agent + tools)."""
     pool = await get_pool()
     company = await get_company_by_id(company_id)
+    if not company:
+        logger.error(f"Company id {company_id} not found; skip filing {filing_id}")
+        return 0
 
-    # Get new claims from this filing
     new_claims = await pool.fetch(
-        """SELECT id, claim_text, claim_type, topic, embedding, claim_date, source_section
+        """SELECT id, claim_text, claim_type, topic, embedding, claim_date, source_section, entities
            FROM claims
            WHERE filing_id = $1 AND embedding IS NOT NULL""",
         filing_id,
@@ -39,7 +54,6 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
     contradiction_count = 0
 
     for claim in new_claims:
-        # Get similar historical claims via pgvector
         embedding_str = str(claim["embedding"])
         candidates = await get_similar_claims(
             embedding_str=embedding_str,
@@ -52,85 +66,46 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
         if not candidates:
             continue
 
-        # Build pairs for NLI scoring
-        pairs = [(claim["claim_text"], c["claim_text"]) for c in candidates]
-        nli_results = score_pairs(pairs)
+        claim_d = _claim_row(claim)
 
-        # Check for contradictions
-        for i, (candidate, nli_result) in enumerate(zip(candidates, nli_results)):
-            if nli_result["contradiction"] >= NLI_CONTRADICTION_THRESHOLD:
-                similarity = candidate["similarity"]
+        for candidate in candidates:
+            cand_d = _claim_row(candidate)
+            outcome = await evaluate_contradiction_pair(
+                claim_d,
+                cand_d,
+                company,
+                float(candidate["similarity"]),
+            )
+            if not outcome:
+                continue
 
-                # Calculate time gap
-                time_gap = None
-                if claim["claim_date"] and candidate["claim_date"]:
-                    time_gap = abs((claim["claim_date"] - candidate["claim_date"]).days)
+            contra_id = await insert_contradiction(
+                claim_a_id=outcome["claim_a_id"],
+                claim_b_id=outcome["claim_b_id"],
+                company_id=company_id,
+                similarity_score=outcome["similarity_score"],
+                nli_score=outcome["nli_score"],
+                severity=outcome["severity"],
+                time_gap_days=outcome["time_gap_days"],
+                explanation=outcome["explanation"],
+                agent_reasoning=outcome["agent_reasoning"],
+            )
 
-                severity = classify_severity(
-                    nli_result["contradiction"],
-                    similarity,
-                    time_gap,
-                )
+            await publish_event("contradiction.found", {
+                "contradiction_id": contra_id,
+                "company_id": company_id,
+                "company_ticker": company["ticker"] if company else None,
+                "severity": outcome["severity"],
+                "claim_a_id": outcome["claim_a_id"],
+                "claim_b_id": outcome["claim_b_id"],
+            })
 
-                # Generate explanation
-                explanation = (
-                    f"Potential contradiction detected (NLI score: {nli_result['contradiction']:.2f}, "
-                    f"similarity: {similarity:.2f}). "
-                    f"Claim A (dated {candidate['claim_date']}): \"{candidate['claim_text'][:200]}\" "
-                    f"vs Claim B (dated {claim['claim_date']}): \"{claim['claim_text'][:200]}\""
-                )
-
-                # Determine which claim is older (claim_a) vs newer (claim_b)
-                if claim["claim_date"] and candidate["claim_date"]:
-                    if claim["claim_date"] >= candidate["claim_date"]:
-                        claim_a_id, claim_b_id = candidate["id"], claim["id"]
-                    else:
-                        claim_a_id, claim_b_id = claim["id"], candidate["id"]
-                else:
-                    claim_a_id, claim_b_id = candidate["id"], claim["id"]
-
-                # Generate LLM agent reasoning
-                agent_reasoning = await generate_reasoning(
-                    company_name=company["name"] if company else "Unknown",
-                    ticker=company["ticker"] if company else "???",
-                    claim_a=candidate["claim_text"],
-                    claim_b=claim["claim_text"],
-                    date_a=str(candidate["claim_date"]) if candidate["claim_date"] else None,
-                    date_b=str(claim["claim_date"]) if claim["claim_date"] else None,
-                    section_a=candidate.get("source_section"),
-                    section_b=claim.get("source_section"),
-                    severity=severity,
-                    nli_score=nli_result["contradiction"],
-                    time_gap=time_gap,
-                )
-
-                contra_id = await insert_contradiction(
-                    claim_a_id=claim_a_id,
-                    claim_b_id=claim_b_id,
-                    company_id=company_id,
-                    similarity_score=similarity,
-                    nli_score=nli_result["contradiction"],
-                    severity=severity,
-                    time_gap_days=time_gap,
-                    explanation=explanation,
-                    agent_reasoning=agent_reasoning,
-                )
-
-                # Publish event
-                await publish_event("contradiction.found", {
-                    "contradiction_id": contra_id,
-                    "company_id": company_id,
-                    "severity": severity,
-                    "claim_a_id": claim_a_id,
-                    "claim_b_id": claim_b_id,
-                })
-
-                contradiction_count += 1
-                logger.info(
-                    f"  Contradiction found (severity={severity}, "
-                    f"NLI={nli_result['contradiction']:.2f}): "
-                    f"claims {claim_a_id} vs {claim_b_id}"
-                )
+            contradiction_count += 1
+            logger.info(
+                f"  Contradiction stored (severity={outcome['severity']}, "
+                f"NLI={outcome['nli_score']:.2f}): "
+                f"claims {outcome['claim_a_id']} vs {outcome['claim_b_id']}"
+            )
 
     logger.info(f"Found {contradiction_count} contradictions for filing {filing_id}")
     return contradiction_count
@@ -144,7 +119,6 @@ async def run_consumer():
 
     await create_consumer_group(stream, group)
 
-    # Ensure LLM model is available for agent reasoning
     await ensure_model_available()
 
     logger.info(f"Listening on stream '{stream}' as {group}/{consumer}")

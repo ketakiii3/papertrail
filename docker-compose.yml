@@ -125,13 +125,17 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        # Browser runs on the host; api-server hostname only works container-to-container
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_WS_URL: ws://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
       - api-server
     environment:
-      NEXT_PUBLIC_API_URL: http://api-server:8000
-      NEXT_PUBLIC_WS_URL: ws://api-server:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
 
 volumes:
   postgres-data:

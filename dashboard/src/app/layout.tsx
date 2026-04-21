@@ -13,32 +13,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className="min-h-screen antialiased">
-        <nav className="glass sticky top-0 z-50 border-b border-white/5">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+        <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--bg-primary)]/90 backdrop-blur-md">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
             <a href="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold">
-                PT
-              </div>
-              <span className="text-lg font-semibold tracking-tight">
+              <span className="font-serif text-xl font-semibold tracking-tight text-warm-950">
                 PaperTrail
               </span>
             </a>
-            <div className="flex items-center gap-6 text-sm text-[var(--text-secondary)]">
-              <a href="/" className="hover:text-white transition-colors">
+            <div className="flex items-center gap-6 text-[13px] text-[var(--text-secondary)]">
+              <a href="/" className="hover:text-warm-950 transition-colors">
                 Dashboard
               </a>
-              <a href="/#search" className="hover:text-white transition-colors">
+              <a href="/#search" className="hover:text-warm-950 transition-colors">
                 Search
               </a>
-              <span className="rounded-full bg-brand-600/20 px-3 py-1 text-xs text-brand-400 border border-brand-600/30">
+              <span className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-[11px] tracking-wide text-[var(--text-muted)]">
                 MVP
               </span>
             </div>
           </div>
         </nav>
-        <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-5 py-10">{children}</main>
       </body>
     </html>
   );

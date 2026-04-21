@@ -12,10 +12,10 @@ import {
 import type { Stats } from "@/lib/api";
 
 const COLORS: Record<string, string> = {
-  critical: "#ef4444",
-  high: "#f97316",
-  medium: "#eab308",
-  low: "#22c55e",
+  critical: "#C2423E",
+  high: "#C27830",
+  medium: "#A89032",
+  low: "#4A8B5C",
 };
 
 export default function SeverityChart({ stats }: { stats: Stats | null }) {
@@ -29,36 +29,38 @@ export default function SeverityChart({ stats }: { stats: Stats | null }) {
   if (data.every((d) => d.count === 0)) return null;
 
   return (
-    <div className="glass rounded-xl p-5">
-      <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
+      <h3 className="font-sans text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)] mb-5">
         Contradictions by Severity
       </h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data}>
           <XAxis
             dataKey="name"
-            tick={{ fill: "#a0a0b0", fontSize: 12 }}
+            tick={{ fill: "#8c7e6a", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fill: "#a0a0b0", fontSize: 12 }}
+            tick={{ fill: "#8c7e6a", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: "#1a1a2e",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "8px",
-              color: "#f0f0f5",
+              backgroundColor: "#161311",
+              border: "1px solid #2a2620",
+              borderRadius: "10px",
+              color: "#e8e4dc",
+              fontSize: "13px",
+              fontFamily: "Plus Jakarta Sans",
             }}
           />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="count" radius={[6, 6, 0, 0]}>
             {data.map((entry) => (
               <Cell
                 key={entry.name}
-                fill={COLORS[entry.name] || "#666"}
+                fill={COLORS[entry.name] || "#6b6154"}
               />
             ))}
           </Bar>

@@ -26,19 +26,15 @@ export default function Home() {
     : contradictions;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12">
       {/* Hero */}
-      <section className="text-center py-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-3">
-          SEC Filing{" "}
-          <span className="bg-gradient-to-r from-brand-400 to-purple-400 bg-clip-text text-transparent">
-            Contradiction Detector
-          </span>
+      <section className="pt-8 pb-2">
+        <h1 className="font-serif text-[clamp(2.25rem,5vw,3.5rem)] font-light italic leading-[1.1] tracking-tight text-warm-950 text-center mb-4">
+          SEC Filing Contradictions
         </h1>
-        <p className="text-[var(--text-secondary)] max-w-2xl mx-auto mb-8">
-          Real-time knowledge graph tracking what public companies say vs. what
-          they do. Powered by NLP claim extraction and semantic contradiction
-          detection.
+        <p className="text-[15px] text-[var(--text-secondary)] max-w-xl mx-auto text-center leading-relaxed mb-10">
+          Tracking what public companies say versus what they do.
+          NLP-powered claim extraction and semantic contradiction detection.
         </p>
         <div className="flex justify-center">
           <SearchBar />
@@ -49,24 +45,26 @@ export default function Home() {
       <StatsCards stats={stats} />
 
       {/* Charts + Live Feed */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-2">
         <SeverityChart stats={stats} />
         <LiveFeed />
       </div>
 
       {/* Contradictions Feed */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Latest Contradictions</h2>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-serif text-2xl font-normal text-warm-950">
+            Latest Contradictions
+          </h2>
           <div className="flex gap-2">
             {["critical", "high", "medium", "low"].map((sev) => (
               <button
                 key={sev}
                 onClick={() => setFilter(filter === sev ? null : sev)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                className={`rounded-full border px-3 py-1 text-[12px] font-medium capitalize transition-colors ${
                   filter === sev
-                    ? "border-brand-500/50 bg-brand-500/10 text-brand-400"
-                    : "border-white/10 text-[var(--text-secondary)] hover:border-white/20"
+                    ? "border-accent-500 bg-accent-50 text-accent-500"
+                    : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-warm-700"
                 }`}
               >
                 {sev}
@@ -76,13 +74,13 @@ export default function Home() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="glass rounded-xl p-12 text-center">
-            <p className="text-[var(--text-secondary)]">
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-14 text-center">
+            <p className="text-[var(--text-secondary)] text-[14px]">
               No contradictions found matching this filter.
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2">
             {filtered.map((c) => (
               <ContradictionCard key={c.id} contradiction={c} />
             ))}

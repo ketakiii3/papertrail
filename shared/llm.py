@@ -27,6 +27,9 @@ Contradiction severity: {severity}
 NLI score: {nli_score:.0%}
 Time gap: {time_gap} days
 
+Tool trace (structured pipeline outputs):
+{tool_digest}
+
 Analysis:"""
 
 
@@ -42,8 +45,10 @@ async def generate_reasoning(
     severity: str,
     nli_score: float,
     time_gap: int | None,
+    tool_digest: str | None = None,
 ) -> str | None:
     """Generate agent reasoning for a contradiction using Ollama."""
+    digest = (tool_digest or "(no tool digest)").strip()
     prompt = REASONING_PROMPT.format(
         company_name=company_name,
         ticker=ticker,
@@ -56,6 +61,7 @@ async def generate_reasoning(
         severity=severity,
         nli_score=nli_score,
         time_gap=time_gap or "unknown",
+        tool_digest=digest,
     )
 
     try:
