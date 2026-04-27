@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, date
 
 from shared.db import get_pool, insert_company, insert_filing
-from shared.redis_client import publish_event
+from shared.kafka_client import publish
 from .edgar_client import EdgarClient
 from .sp500 import get_sp500_companies
 
@@ -64,7 +64,7 @@ async def ingest_company(cik: str, company_id: int, client: EdgarClient):
         if filing_id:
             new_count += 1
             # Publish event for claim extraction
-            await publish_event("filing.new", {
+            await publish("filing.new", {
                 "filing_id": filing_id,
                 "company_id": company_id,
                 "form_type": f["form_type"],

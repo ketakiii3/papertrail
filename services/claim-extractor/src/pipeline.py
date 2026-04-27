@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, "/app")
 
 from shared.db import get_pool, get_filing, mark_filing_processed, insert_claims_batch
-from shared.redis_client import publish_event, create_consumer_group, consume_events
+from shared.kafka_client import publish, consume
 
 from .splitter import (
     split_into_sections, extract_sentences, is_claim_sentence,
@@ -107,7 +107,7 @@ async def process_filing(filing_id: int, company_id: int):
     await mark_filing_processed(filing_id)
 
     # Step 8: Publish event for contradiction detection
-    await publish_event("claims.extracted", {
+    await publish("claims.extracted", {
         "filing_id": filing_id,
         "company_id": company_id,
         "claim_count": len(db_claims),
@@ -118,26 +118,15 @@ async def process_filing(filing_id: int, company_id: int):
 
 
 async def run_consumer():
-    """Run as a Redis Streams consumer processing filing events."""
-    stream = "filing.new"
-    group = "claim-extractors"
-    consumer = "extractor-1"
-
-    await create_consumer_group(stream, group)
-    logger.info(f"Listening on stream '{stream}' as {group}/{consumer}")
-
-    while True:
+    """Kafka consumer processing filing.new events."""
+    async def handle(data: dict) -> None:
+        filing_id = data["filing_id"]
+        company_id = data["company_id"]
         try:
-            events = await consume_events(stream, group, consumer, count=5)
-            for msg_id, data in events:
-                filing_id = data["filing_id"]
-                company_id = data["company_id"]
-                try:
-                    count = await process_filing(filing_id, company_id)
-                    logger.info(f"Processed filing {filing_id}: {count} claims")
-                except Exception as e:
-                    logger.error(f"Failed to process filing {filing_id}: {e}")
+            count = await process_filing(filing_id, company_id)
+            logger.info(f"Processed filing {filing_id}: {count} claims")
         except Exception as e:
-            logger.error(f"Consumer error: {e}")
-            import asyncio
-            await asyncio.sleep(5)
+            logger.error(f"Failed to process filing {filing_id}: {e}")
+            raise
+
+    await consume("filing.new", "claim-extractors", handle)

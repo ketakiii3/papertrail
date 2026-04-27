@@ -38,6 +38,36 @@ services:
     volumes:
       - neo4j-data:/data
 
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --smp 1
+      - --memory 512M
+      - --mode dev-container
+      - --default-log-level=warn
+    ports:
+      - "19092:19092"
+      - "18081:18081"
+      - "18082:18082"
+      - "9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -58,6 +88,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
     env_file: .env
     volumes:
       - ./shared:/app/shared
@@ -69,6 +100,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
     env_file: .env
     volumes:
       - ./shared:/app/shared
@@ -80,6 +112,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
       ollama: { condition: service_started }
     env_file: .env
     volumes:
@@ -92,6 +125,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
       neo4j: { condition: service_started }
     env_file: .env
     volumes:
@@ -104,6 +138,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
     env_file: .env
     volumes:
       - ./shared:/app/shared
@@ -117,6 +152,45 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  surveillance:
+    build:
+      context: .
+      dockerfile: services/surveillance/Dockerfile
+    command: python -m surveillance.consumer
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: services/surveillance/Dockerfile
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    env_file: .env
+    volumes:
+      - ./shared:/app/shared
+
+  flower:
+    build:
+      context: .
+      dockerfile: services/surveillance/Dockerfile
+    command: celery -A shared.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis: { condition: service_healthy }
+      celery-worker: { condition: service_started }
     env_file: .env
     volumes:
       - ./shared:/app/shared
@@ -142,6 +216,7 @@ volumes:
   redis-data:
   neo4j-data:
   ollama-data:
+  redpanda-data:
 
 networks:
   default:

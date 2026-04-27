@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, "/app")
 
 from shared.db import get_pool, get_similar_claims, get_company_by_id, insert_contradiction
-from shared.redis_client import publish_event, create_consumer_group, consume_events
+from shared.kafka_client import publish, consume
 from shared.llm import ensure_model_available
 
 from .agent import evaluate_contradiction_pair
@@ -91,7 +91,7 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
                 agent_reasoning=outcome["agent_reasoning"],
             )
 
-            await publish_event("contradiction.found", {
+            await publish("contradiction.found", {
                 "contradiction_id": contra_id,
                 "company_id": company_id,
                 "company_ticker": company["ticker"] if company else None,
@@ -112,29 +112,17 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
 
 
 async def run_consumer():
-    """Run as a Redis Streams consumer processing claim extraction events."""
-    stream = "claims.extracted"
-    group = "contradiction-detectors"
-    consumer = "detector-1"
-
-    await create_consumer_group(stream, group)
-
+    """Kafka consumer processing claims.extracted events."""
     await ensure_model_available()
 
-    logger.info(f"Listening on stream '{stream}' as {group}/{consumer}")
-
-    while True:
+    async def handle(data: dict) -> None:
+        filing_id = data["filing_id"]
+        company_id = data["company_id"]
         try:
-            events = await consume_events(stream, group, consumer, count=5)
-            for msg_id, data in events:
-                filing_id = data["filing_id"]
-                company_id = data["company_id"]
-                try:
-                    count = await detect_contradictions_for_filing(filing_id, company_id)
-                    logger.info(f"Processed filing {filing_id}: {count} contradictions")
-                except Exception as e:
-                    logger.error(f"Failed to detect contradictions for filing {filing_id}: {e}")
+            count = await detect_contradictions_for_filing(filing_id, company_id)
+            logger.info(f"Processed filing {filing_id}: {count} contradictions")
         except Exception as e:
-            logger.error(f"Consumer error: {e}")
-            import asyncio
-            await asyncio.sleep(5)
+            logger.error(f"Failed to detect contradictions for filing {filing_id}: {e}")
+            raise
+
+    await consume("claims.extracted", "contradiction-detectors", handle)

@@ -12,6 +12,7 @@ class Settings:
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://ollama:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "tinyllama")
+    KAFKA_BOOTSTRAP_SERVERS: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")
 
 
 settings = Settings()

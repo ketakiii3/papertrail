@@ -1,0 +1,12 @@
+pandas>=2.2
+numpy>=1.26
+scipy>=1.13
+statsmodels>=0.14
+yfinance>=0.2.40
+asyncpg>=0.29
+psycopg2-binary>=2.9
+aiokafka>=0.11
+redis>=5.0
+celery[redis]>=5.4
+flower>=2.0
+pydantic>=2.0

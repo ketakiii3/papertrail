@@ -6,6 +6,7 @@ import StatsCards from "@/components/StatsCards";
 import ContradictionCard from "@/components/ContradictionCard";
 import SeverityChart from "@/components/SeverityChart";
 import LiveFeed from "@/components/LiveFeed";
+import SurveillancePanel from "@/components/SurveillancePanel";
 import type { Stats, Contradiction } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
@@ -49,6 +50,9 @@ export default function Home() {
         <SeverityChart stats={stats} />
         <LiveFeed />
       </div>
+
+      {/* Surveillance */}
+      <SurveillancePanel />
 
       {/* Contradictions Feed */}
       <section>

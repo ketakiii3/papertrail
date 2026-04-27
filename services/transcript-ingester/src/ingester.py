@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 from shared.config import settings
 from shared.db import get_pool, insert_filing, get_company_by_ticker
-from shared.redis_client import publish_event
+from shared.kafka_client import publish
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class TranscriptIngester:
                 )
 
                 if filing_id:
-                    await publish_event("filing.new", {
+                    await publish("filing.new", {
                         "filing_id": filing_id,
                         "company_id": company_id,
                         "form_type": "EX-99.1",

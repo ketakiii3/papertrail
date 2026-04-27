@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, "/app")
 
 from shared.db import get_pool
-from shared.redis_client import create_consumer_group, consume_events
+from shared.kafka_client import consume
 from .graph import Neo4jClient
 
 logger = logging.getLogger(__name__)
@@ -88,39 +88,78 @@ async def sync_contradiction_to_graph(client: Neo4jClient, contradiction_id: int
     logger.info(f"Synced contradiction {contradiction_id} to Neo4j")
 
 
+async def sync_insider_traded(client: Neo4jClient, transaction_id: int) -> None:
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        """SELECT t.id, t.insider_name, t.transaction_type,
+                  t.shares, t.price, t.total_value, t.transaction_date,
+                  c.ticker, c.name AS company_name, c.sector
+           FROM insider_transactions t
+           JOIN companies c ON c.id = t.company_id
+           WHERE t.id = $1""",
+        transaction_id,
+    )
+    if not row:
+        logger.warning(f"insider.new for unknown transaction_id={transaction_id}")
+        return
+    client.upsert_company(row["ticker"], row["company_name"], row["sector"])
+    client.upsert_insider_traded(
+        transaction_id=row["id"],
+        insider_name=row["insider_name"],
+        ticker=row["ticker"],
+        transaction_type=row["transaction_type"],
+        shares=row["shares"],
+        price=float(row["price"]) if row["price"] is not None else None,
+        total_value=float(row["total_value"]) if row["total_value"] is not None else None,
+        transaction_date=str(row["transaction_date"]),
+    )
+    logger.info(f"TRADED edge upserted for txn {transaction_id} ({row['insider_name']} -> {row['ticker']})")
+
+
+async def sync_anomalous_movement(client: Neo4jClient, payload: dict) -> None:
+    if not payload.get("flagged"):
+        return  # only flagged events become graph edges
+    client.upsert_anomalous_movement(
+        transaction_id=payload["transaction_id"],
+        insider_name=payload["insider_name"],
+        ticker=payload["ticker"],
+        car=payload["car"],
+        car_zscore=payload["car_zscore"],
+        volume_ratio=payload["volume_ratio"],
+        event_date=payload["event_date"],
+    )
+    logger.info(
+        f"ANOMALOUS_MOVEMENT upserted for txn {payload['transaction_id']} "
+        f"({payload['insider_name']} -> {payload['ticker']}, "
+        f"CAR={payload['car']:+.4f}, z={payload['car_zscore']:+.2f})"
+    )
+
+
 async def run_consumer():
-    """Listen for events and sync to Neo4j."""
+    """Kafka consumers (one per topic) syncing into Neo4j."""
     client = Neo4jClient()
     client.setup_schema()
 
-    # Create consumer groups
-    await create_consumer_group("claims.extracted", "graph-builders")
-    await create_consumer_group("contradiction.found", "graph-builders")
+    async def handle_claims(data: dict) -> None:
+        await sync_claims_to_graph(client, data["filing_id"], data["company_id"])
+
+    async def handle_contradictions(data: dict) -> None:
+        await sync_contradiction_to_graph(client, data["contradiction_id"])
+
+    async def handle_insider(data: dict) -> None:
+        await sync_insider_traded(client, data["transaction_id"])
+
+    async def handle_flag(data: dict) -> None:
+        await sync_anomalous_movement(client, data)
 
     logger.info("Graph builder consumer started")
 
     try:
-        while True:
-            # Process claim events
-            try:
-                events = await consume_events(
-                    "claims.extracted", "graph-builders", "builder-1", count=10
-                )
-                for msg_id, data in events:
-                    await sync_claims_to_graph(client, data["filing_id"], data["company_id"])
-            except Exception as e:
-                logger.error(f"Error processing claims: {e}")
-
-            # Process contradiction events
-            try:
-                events = await consume_events(
-                    "contradiction.found", "graph-builders", "builder-1", count=10
-                )
-                for msg_id, data in events:
-                    await sync_contradiction_to_graph(client, data["contradiction_id"])
-            except Exception as e:
-                logger.error(f"Error processing contradictions: {e}")
-
-            await asyncio.sleep(0.1)
+        await asyncio.gather(
+            consume("claims.extracted", "graph-builders", handle_claims),
+            consume("contradiction.found", "graph-builders", handle_contradictions),
+            consume("insider.new", "graph-builders", handle_insider),
+            consume("surveillance.flag", "graph-builders", handle_flag),
+        )
     finally:
         client.close()

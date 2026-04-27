@@ -10,6 +10,7 @@ import httpx
 
 from shared.config import settings
 from shared.db import get_pool
+from shared.kafka_client import publish
 
 logger = logging.getLogger(__name__)
 
@@ -211,12 +212,13 @@ class Form4Ingester:
 
             for txn in transactions:
                 try:
-                    await pool.execute(
+                    txn_id = await pool.fetchval(
                         """INSERT INTO insider_transactions
                            (company_id, insider_name, insider_title, transaction_type,
                             shares, price, total_value, transaction_date, filing_date)
                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                           ON CONFLICT DO NOTHING""",
+                           ON CONFLICT DO NOTHING
+                           RETURNING id""",
                         company_id,
                         txn["insider_name"],
                         txn["insider_title"],
@@ -227,7 +229,18 @@ class Form4Ingester:
                         txn["transaction_date"],
                         filed_at,
                     )
+                    if txn_id is None:
+                        continue  # ON CONFLICT swallowed it; nothing new to publish
                     new_count += 1
+                    await publish("insider.new", {
+                        "transaction_id": txn_id,
+                        "company_id": company_id,
+                        "insider_name": txn["insider_name"],
+                        "transaction_type": txn["transaction_type"],
+                        "transaction_date": txn["transaction_date"].isoformat()
+                            if hasattr(txn["transaction_date"], "isoformat")
+                            else txn["transaction_date"],
+                    })
                 except Exception as e:
                     logger.warning(f"Failed to insert transaction: {e}")
 

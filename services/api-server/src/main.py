@@ -11,9 +11,10 @@ from fastapi.responses import RedirectResponse
 
 from shared.db import get_pool, close_pool
 from shared.redis_client import get_redis, close_redis
+from shared.kafka_client import close_producer
 from shared.config import settings
 
-from src.routers import companies, search, watchlist, ws, filings
+from src.routers import companies, search, watchlist, ws, filings, surveillance
 
 
 @asynccontextmanager
@@ -21,8 +22,15 @@ async def lifespan(app: FastAPI):
     # Startup
     await get_pool()
     await get_redis()
+    fanout_task = await ws.start_ws_fanout()
     yield
     # Shutdown
+    fanout_task.cancel()
+    try:
+        await fanout_task
+    except Exception:
+        pass
+    await close_producer()
     await close_pool()
     await close_redis()
 
@@ -47,6 +55,7 @@ app.include_router(search.router)
 app.include_router(watchlist.router)
 app.include_router(ws.router)
 app.include_router(filings.router)
+app.include_router(surveillance.router)
 
 
 @app.get("/")

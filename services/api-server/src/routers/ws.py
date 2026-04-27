@@ -1,12 +1,15 @@
-"""WebSocket feed for real-time updates."""
+"""WebSocket feed for real-time updates.
+
+A single background task consumes Kafka topics and fans out to all connected
+WebSocket clients via ConnectionManager.broadcast.
+"""
 
 import asyncio
-import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from shared.redis_client import get_redis
+from shared.kafka_client import consume
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,47 +24,68 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
+        dead: list[WebSocket] = []
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except Exception:
-                pass
+                dead.append(connection)
+        for d in dead:
+            self.disconnect(d)
 
 
 manager = ConnectionManager()
+
+
+async def _make_handler(event_type: str):
+    async def handle(data: dict) -> None:
+        await manager.broadcast({"type": event_type, "data": data})
+    return handle
+
+
+async def start_ws_fanout() -> asyncio.Task:
+    """Spawn the background Kafka consumers that feed the WS broadcast.
+
+    Call from FastAPI app startup; cancel on shutdown.
+    """
+    contradiction_handler = await _make_handler("contradiction")
+    surveillance_handler = await _make_handler("surveillance")
+
+    async def run():
+        await asyncio.gather(
+            consume(
+                "contradiction.found",
+                "api-ws-fanout",
+                contradiction_handler,
+                auto_offset_reset="latest",
+            ),
+            consume(
+                "surveillance.flag",
+                "api-ws-fanout",
+                surveillance_handler,
+                auto_offset_reset="latest",
+            ),
+        )
+
+    return asyncio.create_task(run())
 
 
 @router.websocket("/ws/feed")
 async def websocket_feed(websocket: WebSocket):
     await manager.connect(websocket)
     try:
-        # Listen for Redis stream events and forward to WebSocket
-        redis = await get_redis()
-        last_id = "$"
-
         while True:
+            # Keep the connection alive; broadcasts come from the background task.
+            await asyncio.sleep(30)
             try:
-                # Read from contradiction.found stream
-                messages = await redis.xread(
-                    {"contradiction.found": last_id},
-                    count=10,
-                    block=5000,
-                )
-                for stream_name, entries in messages:
-                    for msg_id, fields in entries:
-                        last_id = msg_id
-                        data = json.loads(fields.get("data", "{}"))
-                        await websocket.send_json({
-                            "type": "contradiction",
-                            "data": data,
-                        })
-            except asyncio.CancelledError:
+                await websocket.send_json({"type": "ping"})
+            except Exception:
                 break
-            except Exception as e:
-                logger.error(f"WebSocket stream error: {e}")
-                await asyncio.sleep(1)
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket)

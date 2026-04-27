@@ -25,6 +25,7 @@ class Neo4jClient:
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Filing) REQUIRE f.filing_id IS UNIQUE",
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (cl:Claim) REQUIRE cl.claim_id IS UNIQUE",
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE",
+                "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Insider) REQUIRE i.name IS UNIQUE",
                 "CREATE INDEX IF NOT EXISTS FOR (cl:Claim) ON (cl.claim_date)",
                 "CREATE INDEX IF NOT EXISTS FOR (f:Filing) ON (f.filed_at)",
             ]
@@ -91,6 +92,43 @@ class Neo4jClient:
                        MERGE (p)-[:MADE]->(cl)""",
                     speaker=speaker, ticker=company_ticker, claim_id=claim_id,
                 )
+
+    def upsert_insider_traded(self, transaction_id: int, insider_name: str,
+                              ticker: str, transaction_type: str,
+                              shares: int = None, price: float = None,
+                              total_value: float = None, transaction_date: str = None):
+        """Insider --[TRADED]--> Company (one edge per transaction_id)."""
+        with self._driver.session() as session:
+            session.run(
+                """MERGE (i:Insider {name: $name})
+                   MERGE (c:Company {ticker: $ticker})
+                   MERGE (i)-[r:TRADED {transaction_id: $tid}]->(c)
+                   SET r.transaction_date = $date,
+                       r.type = $type,
+                       r.shares = $shares,
+                       r.price = $price,
+                       r.total_value = $total_value""",
+                name=insider_name, ticker=ticker, tid=transaction_id,
+                date=transaction_date, type=transaction_type,
+                shares=shares, price=price, total_value=total_value,
+            )
+
+    def upsert_anomalous_movement(self, transaction_id: int, insider_name: str,
+                                  ticker: str, car: float, car_zscore: float,
+                                  volume_ratio: float, event_date: str):
+        """Insider --[ANOMALOUS_MOVEMENT]--> Company (only when flagged)."""
+        with self._driver.session() as session:
+            session.run(
+                """MERGE (i:Insider {name: $name})
+                   MERGE (c:Company {ticker: $ticker})
+                   MERGE (i)-[r:ANOMALOUS_MOVEMENT {transaction_id: $tid}]->(c)
+                   SET r.car = $car,
+                       r.car_zscore = $z,
+                       r.volume_ratio = $vol,
+                       r.event_date = $date""",
+                name=insider_name, ticker=ticker, tid=transaction_id,
+                car=car, z=car_zscore, vol=volume_ratio, date=event_date,
+            )
 
     def add_contradiction_edge(self, claim_a_id: int, claim_b_id: int,
                                severity: str, similarity: float,

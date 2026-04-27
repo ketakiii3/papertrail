@@ -88,6 +88,30 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_insider_company ON insider_transactions(company_id, transaction_date DESC);
 
+-- Surveillance flags (event-study results per insider transaction)
+CREATE TABLE IF NOT EXISTS surveillance_flags (
+    id              SERIAL PRIMARY KEY,
+    transaction_id  INT NOT NULL REFERENCES insider_transactions(id) ON DELETE CASCADE,
+    company_id      INT NOT NULL REFERENCES companies(id),
+    event_date      DATE NOT NULL,
+    car             NUMERIC(8,5),
+    car_zscore      NUMERIC(8,4),
+    volume_ratio    NUMERIC(8,4),
+    baseline_alpha  NUMERIC(10,6),
+    baseline_beta   NUMERIC(10,6),
+    baseline_r2     NUMERIC(6,4),
+    daily_ar        JSONB,
+    flagged         BOOLEAN NOT NULL DEFAULT false,
+    flag_reason     TEXT,
+    computed_at     TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (transaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_surveillance_flagged
+    ON surveillance_flags(flagged, event_date DESC);
+CREATE INDEX IF NOT EXISTS idx_surveillance_company
+    ON surveillance_flags(company_id, event_date DESC);
+
 -- Watchlist (simple, no auth for MVP)
 CREATE TABLE IF NOT EXISTS watchlist (
     id SERIAL PRIMARY KEY,
