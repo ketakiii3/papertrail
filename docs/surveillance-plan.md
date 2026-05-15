@@ -124,3 +124,50 @@ This file is the running log of *how* the surveillance module gets built: ordere
 **Problem:** `docker compose run --rm --no-deps edgar-ingester python -m scripts.kafka_smoke` failed with `ModuleNotFoundError: No module named 'scripts'`.
 **Root cause:** Service Dockerfiles only `COPY services/<x>/src/` and `shared/`. `scripts/` is a dev-only directory not built into any image, and compose only mounts `./shared:/app/shared`.
 **Fix:** Bind-mount it for one-off runs: `docker compose run --rm --no-deps -v "$(pwd)/scripts:/app/scripts" edgar-ingester python -m scripts.kafka_smoke`. Don't bake `scripts/` into images — it's not runtime code.
+
+---
+
+## Next steps — execution plan (2026-05-14)
+
+Audit on 2026-05-14 confirmed M6 is still entirely open: `services/surveillance/src/backfill.py` does not exist; `README.md` has zero mentions of Kafka, Celery, Redpanda, Flower, or surveillance; thresholds untuned; no screenshots. Below is the ordered plan to close M6 and the deferred items.
+
+### Step 1 — `backfill.py` (one-shot replay script)
+- [ ] Create `services/surveillance/src/backfill.py` with a `main()` that:
+  - Connects to Postgres via the same DSN `tasks.py` uses (sync psycopg2 to match Celery prefork).
+  - Selects `id FROM insider_transactions t LEFT JOIN surveillance_flags f ON f.transaction_id = t.id WHERE f.id IS NULL ORDER BY t.transaction_date DESC`.
+  - For each id: `compute_event_study.delay(id)` and log the queued task id.
+  - Accepts `--limit N`, `--ticker TICKER`, `--dry-run` flags.
+- [ ] Add a `make-style` invocation note (no Makefile in repo yet) — runs as `docker compose run --rm --no-deps surveillance python -m src.backfill --dry-run`.
+- [ ] Smoke test: dry-run prints the expected count; real run enqueues and Flower shows tasks transitioning STARTED → SUCCESS.
+
+### Step 2 — Threshold tuning
+- [ ] After backfill completes, query `SELECT COUNT(*) FILTER (WHERE flagged) * 1.0 / COUNT(*) FROM surveillance_flags;` — target band is 5–15%.
+- [ ] If outside band: adjust `SURV_CAR_Z_THRESHOLD` (currently 2.0) and/or `SURV_VOLUME_THRESHOLD` (currently 1.5) in `.env.example` and `.env`. Re-run backfill (idempotent on `transaction_id` UNIQUE — will need to `DELETE FROM surveillance_flags` first or add an `--overwrite` flag in Step 1).
+- [ ] Record final chosen thresholds + observed flag rate in the decision log below.
+
+### Step 3 — README rewrite
+- [ ] Update the architecture table to include `surveillance` (Kafka consumer → Celery enqueue) and `celery-worker` (event-study compute) rows.
+- [ ] Replace any "Redis Streams" references with "Kafka (Redpanda)" in the architecture prose. Mention Redis is retained for cache + Celery broker only.
+- [ ] Add **"Event bus & async compute"** subsection: Redpanda on `:9092`/`:19092`, topics `filing.new` / `claims.extracted` / `contradiction.found` / `insider.new` / `surveillance.flag`, Flower UI on `:5555`.
+- [ ] Add **"Surveillance module"** section: what it does (event-study CAR + volume anomaly on Form 4s), how to view flags (`/api/v1/surveillance/flags`, dashboard panel), the env vars from PRD §7.
+- [ ] Extend the URL table with Flower (`http://localhost:5555`) and Redpanda admin (`http://localhost:9644`).
+- [ ] Add a short "Run the backfill" command block referencing Step 1.
+
+### Step 4 — Screenshots
+- [ ] Capture Flower dashboard with at least one SUCCESS task → `docs/img/flower.png`.
+- [ ] Capture dashboard SurveillancePanel with a flagged row and the open drawer (AR chart visible) → `docs/img/surveillance-panel.png`.
+- [ ] Embed both in README under the relevant sections with relative paths.
+
+### Step 5 — Visual verification of dashboard (carry-over caveat from M5)
+- [ ] Open `http://localhost:3000`, confirm SurveillancePanel renders between Charts and Contradictions Feed without layout breakage.
+- [ ] Click a flagged row → drawer opens, 3-line recharts plot renders, α/β/R² visible.
+- [ ] Note any CSS / spacing fixes needed; either fix inline or open a follow-up.
+
+### Step 6 — Optional: standalone insider timeline with anomaly overlay (M5 deferred)
+- [ ] Only if Steps 1–5 finish with time to spare. The drawer already covers the single-event case; this is a comparative view across many flagged events.
+- [ ] If pursued: new `InsiderTimeline.tsx` consuming `/api/v1/surveillance/flags?ticker=`, x-axis = transaction_date, dots colored by `flagged`, hover shows CAR/z.
+
+### Step 7 — Out-of-scope but adjacent: Form 4 parser fix
+- [ ] Not part of M6; tracked separately. Replace hardcoded `xslF345X05/` suffix in `form4_parser.fetch_form4_filings` with discovery from the filing index page. Required before real (non-seeded) surveillance traffic flows.
+
+**Definition of done for M6:** Steps 1–4 complete, Step 5 visually confirmed, plan.md and README.md reflect the shipped state, flag rate inside 5–15% band, screenshots committed.
