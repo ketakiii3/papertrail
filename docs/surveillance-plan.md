@@ -168,6 +168,26 @@ Audit on 2026-05-14 confirmed M6 is still entirely open: `services/surveillance/
 - [ ] If pursued: new `InsiderTimeline.tsx` consuming `/api/v1/surveillance/flags?ticker=`, x-axis = transaction_date, dots colored by `flagged`, hover shows CAR/z.
 
 ### Step 7 — Out-of-scope but adjacent: Form 4 parser fix
-- [ ] Not part of M6; tracked separately. Replace hardcoded `xslF345X05/` suffix in `form4_parser.fetch_form4_filings` with discovery from the filing index page. Required before real (non-seeded) surveillance traffic flows.
+- [x] Code-level fix landed in an earlier commit: `form4_parser.fetch_form4_filings` no longer hardcodes `xslF345X05/`; the doc URL is built from `primaryDocument` returned by the EDGAR submissions JSON.
+- [ ] Still owed: end-to-end verification against a real (non-seeded) S&P 500 CIK. Run `docker compose exec edgar-ingester python -c "import asyncio; from src.form4_parser import run_form4_ingestion; asyncio.run(run_form4_ingestion())"` and confirm `insider_transactions` populates → `insider.new` published → `surveillance.flag` follows.
 
 **Definition of done for M6:** Steps 1–4 complete, Step 5 visually confirmed, plan.md and README.md reflect the shipped state, flag rate inside 5–15% band, screenshots committed.
+
+---
+
+## 2026-05-21 — M6 partial close
+
+Closed in this pass (code/doc work I can do from a Claude session):
+
+- **Step 1 ✅** — `services/surveillance/src/backfill.py` written. CLI: `--limit N`, `--ticker T`, `--dry-run`, `--overwrite`. `--overwrite` deletes existing `surveillance_flags` rows before re-enqueuing, so retuned thresholds recompute cleanly without colliding with the `UNIQUE(transaction_id)` constraint. Module docstring spells out the `docker compose run` invocation.
+- **Step 3 ✅** — README rewritten top-to-bottom. Architecture table includes `surveillance`/`celery-worker`/`graph-builder`/`transcript-ingester`; new "Event bus & async compute" topic table; new "Surveillance module" section with methodology + env vars; new "Run the backfill" + "Threshold tuning" subsections (SQL query + 5–15% target band); Flower (`:5555`) and Redpanda admin (`:9644`) added to the URL table.
+- **Adjacent cleanup ✅** — `docs/docker-dashboard-notes.md` no longer claims graph-builder skips `TRADED`; the Cypher example lists `TRADED` and `ANOMALOUS_MOVEMENT`; Live Feed paragraph now references Kafka (not Redis). `shared/redis_client.publish_event` / `create_consumer_group` / `consume_events` deleted (dead since the Kafka migration); both `redis_client.py` and `kafka_client.py` docstrings updated.
+- **Step 7 ✅ partially** — code fix is in (see above). Real-CIK verification still owed by the user.
+
+Still owed (user-blocked):
+
+- **Step 2** — actually run the backfill, measure the flag rate, tune thresholds, record the chosen values in the decision log below.
+- **Step 4** — capture `docs/img/flower.png` + `docs/img/surveillance-panel.png` and embed in README.
+- **Step 5** — eyeball the dashboard panel.
+- **Step 7** — real-CIK Form 4 verification.
+- **Step 6** — `InsiderTimeline.tsx` is deferred indefinitely per 2026-05-21 user decision (drawer covers single-event case; component only worth building once many flagged events exist).

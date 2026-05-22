@@ -26,7 +26,7 @@ def _get_embed_model():
 
 @router.get("/search/claims", response_model=list[SearchResult])
 async def search_claims(
-    q: str = Query(..., min_length=3, description="Search query"),
+    q: str = Query(..., min_length=3, max_length=200, description="Search query"),
     limit: int = Query(20, le=100),
     mode: str = Query("semantic", description="Search mode: 'semantic' or 'text'"),
 ):

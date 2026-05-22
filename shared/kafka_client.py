@@ -1,7 +1,7 @@
 """Kafka (Redpanda) client — JSON producer + consumer helpers.
 
-Replaces shared/redis_client.publish_event for inter-service eventing.
-Redis is still used for caching and as Celery broker.
+All inter-service events go through here. Redis is reserved for caching
+(surveillance/market_data.py) and as the Celery broker (shared/celery_app.py).
 """
 
 import json

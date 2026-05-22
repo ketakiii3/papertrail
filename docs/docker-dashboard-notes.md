@@ -72,7 +72,7 @@ The **claim-extractor** image **pre-downloads** FinBERT and the **sentence-trans
 
 ## Live Feed: “Demo” vs real WebSocket
 
-The dashboard **Live Feed** uses **`NEXT_PUBLIC_WS_URL`** (e.g. `ws://localhost:8000`). When set, the UI connects to **`/ws/feed`** on the API and shows **Live**; events appear when the **contradiction-detector** publishes to Redis. When `NEXT_PUBLIC_WS_URL` is **unset** (e.g. local Next dev with mock routes only), the feed stays **Demo** sample data. Rebuild the dashboard image after changing WebSocket or API URL env vars.
+The dashboard **Live Feed** uses **`NEXT_PUBLIC_WS_URL`** (e.g. `ws://localhost:8000`). When set, the UI connects to **`/ws/feed`** on the API and shows **Live**; events appear when the **contradiction-detector** publishes `contradiction.found` or the **celery-worker** publishes `surveillance.flag` to Kafka. When `NEXT_PUBLIC_WS_URL` is **unset** (e.g. local Next dev with mock routes only), the feed stays **Demo** sample data. Rebuild the dashboard image after changing WebSocket or API URL env vars.
 
 ## Neo4j Browser: querying the graph
 
@@ -90,11 +90,11 @@ RETURN n, r, m LIMIT 50
 
 ```cypher
 MATCH (n)-[r]->(m)
-WHERE type(r) IN ['CONTRADICTS', 'CONTAINS', 'FILED', 'ABOUT', 'MADE']
+WHERE type(r) IN ['CONTRADICTS', 'CONTAINS', 'FILED', 'ABOUT', 'MADE', 'TRADED', 'ANOMALOUS_MOVEMENT']
 RETURN n, r, m LIMIT 50
 ```
 
-This project’s graph-builder does **not** create a **`TRADED`** relationship; insider trades may live only in Postgres. Contradiction edges use **`CONTRADICTS`** and store **`severity`**, **`similarity`**, etc. on **`r`**, e.g. `r.severity`.
+As of the surveillance milestone, **graph-builder** writes two insider edge types in addition to the original ones: `(:Insider)-[:TRADED {transaction_id, type, shares, price, total_value, transaction_date}]->(:Company)` for every Form 4 transaction, and `(:Insider)-[:ANOMALOUS_MOVEMENT {transaction_id, car, car_zscore, volume_ratio, event_date}]->(:Company)` only when an event study flags the transaction. Contradiction edges still use `CONTRADICTS` between two `Claim` nodes and store `severity`, `similarity`, `nli_score`, `time_gap_days` on the relationship.
 
 **Simpler** — only contradiction links between claims:
 

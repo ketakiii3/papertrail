@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class CompanyResponse(BaseModel):
@@ -113,5 +113,5 @@ class StatsResponse(BaseModel):
 
 
 class WatchlistRequest(BaseModel):
-    email: str
+    email: EmailStr
     ticker: str

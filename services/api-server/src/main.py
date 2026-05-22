@@ -1,11 +1,12 @@
 """FastAPI API Server entry point."""
 
+import os
 import sys
 sys.path.insert(0, "/app")
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -15,6 +16,16 @@ from shared.kafka_client import close_producer
 from shared.config import settings
 
 from src.routers import companies, search, watchlist, ws, filings, surveillance
+
+
+# Comma-separated allowlist. Default covers the local dashboard + the API's own
+# Swagger UI. Override with CORS_ALLOWED_ORIGINS in .env when deploying.
+_DEFAULT_ORIGINS = "http://localhost:3000,http://localhost:8000"
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+] or _DEFAULT_ORIGINS.split(",")
 
 
 @asynccontextmanager
@@ -44,11 +55,23 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    # PaperTrail uses no cookies/sessions, so credentials are unnecessary
+    # and the `*` + credentials=True combo is explicitly unsafe.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # HSTS intentionally omitted — only meaningful on real HTTPS.
+    return response
 
 app.include_router(companies.router)
 app.include_router(search.router)
