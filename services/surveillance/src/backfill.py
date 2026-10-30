@@ -1,9 +1,9 @@
 """Replay event-study computation across existing insider transactions.
 
-Selects rows from `insider_transactions` that have no `surveillance_flags`
-entry and enqueues `compute_event_study.delay(id)` for each. Use --overwrite
-when retuning thresholds — it deletes existing flag rows first so the
-UNIQUE(transaction_id) constraint doesn't drop the recomputed result.
+Selects open-market buy/sell rows from `insider_transactions` that have no
+`surveillance_flags` entry and enqueues `compute_event_study.delay(id)` for
+each. Use --overwrite when retuning thresholds — it deletes existing flag rows
+first so the UNIQUE(transaction_id) constraint doesn't drop the recomputed result.
 
 Usage (inside the compose network — needs the Celery broker reachable):
 
@@ -39,14 +39,14 @@ logger = logging.getLogger(__name__)
 def _select_transactions(
     cur, *, ticker: str | None, limit: int | None, overwrite: bool
 ) -> list[dict]:
-    where = []
+    where = ["t.transaction_type IN ('buy', 'sell')"]  # open-market trades only
     params: list = []
     if ticker:
         where.append("c.ticker = %s")
         params.append(ticker.upper())
     if not overwrite:
         where.append("f.id IS NULL")
-    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    where_sql = "WHERE " + " AND ".join(where)
     limit_sql = "" if limit is None else "LIMIT %s"
     if limit is not None:
         params.append(limit)

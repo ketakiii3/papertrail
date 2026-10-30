@@ -3,7 +3,6 @@
 import logging
 
 import numpy as np
-from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +12,12 @@ _model = None
 LABELS = ["contradiction", "entailment", "neutral"]
 
 
-def get_model() -> CrossEncoder:
+def get_model():
     global _model
     if _model is None:
+        # Imported here so code that only needs classify_severity (and tests) doesn't pull in torch
+        from sentence_transformers import CrossEncoder
+
         logger.info("Loading NLI cross-encoder model...")
         _model = CrossEncoder("cross-encoder/nli-deberta-v3-base")
         logger.info("NLI model loaded")

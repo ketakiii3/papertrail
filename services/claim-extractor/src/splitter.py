@@ -45,8 +45,8 @@ CLAIM_INDICATORS = [
     r"(?i)\b(guidance|outlook|target|goal)\b",
     r"(?i)\b(no\s+plans?\s+to|do\s+not\s+expect|will\s+not)\b",
     r"(?i)\b(revenue|earnings|margin|growth|decline|increase|decrease)\b",
-    r"(?i)\b(restructur|layoff|workforce\s+reduction|headcount)\b",
-    r"(?i)\b(acqui|merger|divest|spin.off)\b",
+    r"(?i)\b(restructur\w*|layoffs?|workforce|headcount)\b",
+    r"(?i)\b(acqui\w*|merger|divest\w*|spin.off)\b",
     r"(?i)\b(risk|uncertain|material|significant)\b",
     r"(?i)\b(million|billion|percent|%)\b",
     r"(?i)\b(fiscal\s+year|quarter|fy\d{2,4}|q[1-4])\b",
@@ -115,7 +115,8 @@ def classify_claim_type(sentence: str) -> str:
 
     if any(w in s_lower for w in ["expect", "anticipate", "forecast", "guidance", "outlook", "project"]):
         return "guidance"
-    if any(w in s_lower for w in ["risk", "uncertain", "could adversely", "material adverse"]):
+    if any(w in s_lower for w in ["risk", "uncertain", "could adversely", "material adverse",
+                                  "could materially", "may adversely", "disruption"]):
         return "risk"
     if any(w in s_lower for w in ["strategy", "plan to", "intend to", "initiative", "no plans"]):
         return "strategy"
@@ -133,13 +134,14 @@ def classify_topic(sentence: str) -> str:
         "revenue": ["revenue", "sales", "top line", "top-line"],
         "profitability": ["margin", "profit", "earnings", "ebitda", "operating income", "net income"],
         "workforce": ["employee", "headcount", "workforce", "layoff", "restructur", "hiring"],
-        "growth": ["growth", "expand", "increase", "scale"],
         "m&a": ["acqui", "merger", "divest", "spin-off", "buyout"],
         "regulatory": ["regulat", "compliance", "legal", "litigation", "sec ", "ftc"],
         "product": ["product", "launch", "r&d", "research", "innovation", "patent"],
         "capital": ["dividend", "buyback", "repurchase", "capex", "capital expenditure", "debt"],
         "supply_chain": ["supply chain", "supplier", "logistics", "inventory"],
         "macro": ["inflation", "interest rate", "recession", "macroeconomic", "geopolitical"],
+        # Generic words last, so "increased our dividend" is capital, not growth
+        "growth": ["growth", "expand", "increase", "scale"],
     }
 
     for topic, keywords in topic_keywords.items():

@@ -95,7 +95,7 @@ class Neo4jClient:
 
     def upsert_insider_traded(self, transaction_id: int, insider_name: str,
                               ticker: str, transaction_type: str,
-                              shares: int = None, price: float = None,
+                              shares: float = None, price: float = None,
                               total_value: float = None, transaction_date: str = None):
         """Insider --[TRADED]--> Company (one edge per transaction_id)."""
         with self._driver.session() as session:
@@ -133,6 +133,9 @@ class Neo4jClient:
     def add_contradiction_edge(self, claim_a_id: int, claim_b_id: int,
                                severity: str, similarity: float,
                                nli_score: float, time_gap_days: int = None):
+        # MERGE is directional. That stays consistent because the detector always
+        # stores the older claim as A, and Postgres keeps one row per unordered
+        # pair (uq_contradiction_pair), so (b)->(a) is never written for the same pair.
         with self._driver.session() as session:
             session.run(
                 """MATCH (a:Claim {claim_id: $a_id})

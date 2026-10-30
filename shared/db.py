@@ -108,8 +108,8 @@ async def get_insider_transactions_between(
     """Form 4 insider rows with transaction_date in [start_date, end_date] (inclusive)."""
     pool = await get_pool()
     rows = await pool.fetch(
-        """SELECT id, insider_name, insider_title, transaction_type, shares, price,
-                  total_value, transaction_date, filing_date
+        """SELECT id, insider_name, insider_title, transaction_type, transaction_code,
+                  shares, price, total_value, transaction_date, filing_date
            FROM insider_transactions
            WHERE company_id = $1
              AND transaction_date >= $2
@@ -122,11 +122,27 @@ async def get_insider_transactions_between(
     return [dict(r) for r in rows]
 
 
+async def existing_contradiction_partners(claim_id: int, other_ids: list[int]) -> set[int]:
+    """Ids in `other_ids` already stored as a contradiction pair with `claim_id` (either order)."""
+    if not other_ids:
+        return set()
+    pool = await get_pool()
+    rows = await pool.fetch(
+        """SELECT CASE WHEN claim_a_id = $1 THEN claim_b_id ELSE claim_a_id END AS other_id
+           FROM contradictions
+           WHERE (claim_a_id = $1 AND claim_b_id = ANY($2::int[]))
+              OR (claim_b_id = $1 AND claim_a_id = ANY($2::int[]))""",
+        claim_id, other_ids
+    )
+    return {r["other_id"] for r in rows}
+
+
 async def insert_contradiction(claim_a_id: int, claim_b_id: int, company_id: int,
                                 similarity_score: float, nli_score: float,
                                 severity: str, time_gap_days: int = None,
                                 explanation: str = None,
-                                agent_reasoning: str = None) -> int:
+                                agent_reasoning: str = None) -> int | None:
+    """Insert a contradiction; returns None if the pair (in either order) already exists."""
     pool = await get_pool()
     row = await pool.fetchrow(
         """INSERT INTO contradictions (claim_a_id, claim_b_id, company_id,
@@ -134,8 +150,9 @@ async def insert_contradiction(claim_a_id: int, claim_b_id: int, company_id: int
                                        severity, time_gap_days, explanation,
                                        agent_reasoning)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT ((LEAST(claim_a_id, claim_b_id)), (GREATEST(claim_a_id, claim_b_id))) DO NOTHING
            RETURNING id""",
         claim_a_id, claim_b_id, company_id, similarity_score, nli_score,
         severity, time_gap_days, explanation, agent_reasoning
     )
-    return row["id"]
+    return row["id"] if row else None

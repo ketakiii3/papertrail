@@ -108,6 +108,7 @@ This file is the running log of *how* the surveillance module gets built: ordere
 | 2026-04-26 | `TRADED` edge written by graph-builder consuming `insider.new`, not by edgar-ingester directly | Single writer to Neo4j (graph-builder) keeps connection management and schema concerns in one service. Matches existing pattern for `CONTRADICTS`. |
 | 2026-04-26 | `Insider` node keyed by `name` only (UNIQUE constraint) for v1 | Simplest. Known limitation: same-name insiders at different companies collide. Acceptable for demo; flagged as risk in PRD §4.4. |
 | 2026-04-26 | **Approved by user**: Redpanda + Phase A before Phase B | Execution begins at M0a. |
+| 2026-10-30 | Event studies run on **open-market trades only** (Form 4 codes P/S) | Tax withholding (F), gifts (G), option exercises (M/X) and grants (A) move shares without expressing a view on the price; studying them added noise. They're stored as `transaction_type = 'other'` with the raw `transaction_code`. (Fix F3, `docs/fixes-and-tool-calling-plan.md`.) |
 
 ---
 

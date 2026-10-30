@@ -108,7 +108,7 @@ async def sync_insider_traded(client: Neo4jClient, transaction_id: int) -> None:
         insider_name=row["insider_name"],
         ticker=row["ticker"],
         transaction_type=row["transaction_type"],
-        shares=row["shares"],
+        shares=float(row["shares"]) if row["shares"] is not None else None,
         price=float(row["price"]) if row["price"] is not None else None,
         total_value=float(row["total_value"]) if row["total_value"] is not None else None,
         transaction_date=str(row["transaction_date"]),

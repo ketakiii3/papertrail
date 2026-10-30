@@ -21,8 +21,8 @@ TITLE_PATTERNS = {
     r"(?i)\bCFO\b|chief\s+financial": "CFO",
     r"(?i)\bCOO\b|chief\s+operating": "COO",
     r"(?i)\bCTO\b|chief\s+technology": "CTO",
+    r"(?i)\bvice\s+president\b|\bVP\b": "VP",  # before President, which it contains
     r"(?i)\bpresident\b": "President",
-    r"(?i)\bvice\s+president\b|\bVP\b": "VP",
     r"(?i)\bdirector\b": "Director",
     r"(?i)\banalyst\b": "Analyst",
 }

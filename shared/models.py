@@ -84,7 +84,8 @@ class InsiderTransaction(BaseModel):
     insider_name: str
     insider_title: Optional[str] = None
     transaction_type: str
-    shares: Optional[int] = None
+    transaction_code: Optional[str] = None
+    shares: Optional[float] = None
     price: Optional[float] = None
     total_value: Optional[float] = None
     transaction_date: date

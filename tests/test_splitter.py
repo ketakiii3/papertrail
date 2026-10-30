@@ -1,9 +1,6 @@
 """Tests for claim extraction splitter module."""
 
-import sys
-sys.path.insert(0, "/Users/ketaki.dabade/papertrail")
-
-from services.claim_extractor.src.splitter import (
+from claim_extractor.splitter import (
     extract_sentences,
     is_claim_sentence,
     classify_claim_type,
