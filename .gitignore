@@ -11,3 +11,7 @@ node_modules/
 .next/
 **/.DS_Store
 *.log
+
+# Local compose tweaks (e.g. port remaps)
+docker-compose.override.yml
+.claude/launch.json

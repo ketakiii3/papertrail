@@ -14,12 +14,24 @@ from shared.kafka_client import publish
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://data.sec.gov"
+BASE_URL = "https://data.sec.gov"           # submissions JSON
+ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data"  # filing documents
 
 # Form 4 transaction codes that are open-market trades. Everything else
 # (F = tax withholding, G = gift, M/X = option exercise, A = grant, ...) is
 # "other": it moves shares but says nothing about the insider's view.
 OPEN_MARKET_TYPES = {"P": "buy", "S": "sell"}
+
+
+def form4_xml_url(cik: str, accession: str, primary_doc: str) -> str:
+    """URL of a Form 4's raw XML.
+
+    Filing documents live on www.sec.gov, not data.sec.gov. `primaryDocument`
+    usually names the XSL-rendered HTML view ("xslF345X06/form4.xml"); the raw
+    XML the parser needs is the same file name without the xsl directory.
+    """
+    doc = re.sub(r"^xsl[^/]*/", "", primary_doc)
+    return f"{ARCHIVES_URL}/{int(cik)}/{accession.replace('-', '')}/{doc}"
 
 
 def classify_transaction(code: str) -> str:
@@ -77,9 +89,8 @@ class Form4Ingester:
                 continue
 
             accession = accessions[i]
-            accession_no_dash = accession.replace("-", "")
             primary_doc = primary_docs[i] if i < len(primary_docs) else ""
-            doc_url = f"{BASE_URL}/Archives/edgar/data/{cik_padded}/{accession_no_dash}/{primary_doc}"
+            doc_url = form4_xml_url(cik, accession, primary_doc)
 
             filings.append({
                 "accession_number": accession,

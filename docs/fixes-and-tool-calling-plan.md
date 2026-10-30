@@ -1,6 +1,6 @@
 # PaperTrail: plan for the fixes and real tool calling
 
-**Written:** 2026-10-30. **Status:** F0–F8 implemented on `fix/correctness` (2026-10-30), not yet merged; manual Docker-stack check, F6 timing, and PR #1 still open. E and T not started.
+**Written:** 2026-10-30. **Status:** F0–F8 done on `fix/correctness` and in PR #1 (not merged); dev DB migrated, AAPL re-ingest check and F6 timing recorded in the worklog. E and T not started.
 **LLM decision (2026-10-30):** local only for now. Small models via Ollama, no hosted API. Default `qwen3:4b`; see §4.0.
 **Scope:** correctness fixes (F1–F8), a small evaluation set (E1–E3), and real LLM tool calling (T1–T8). Deployment is a separate decision; see `docs/deployment-options.md`. Everything here works with the existing Docker stack and doesn't depend on how it's deployed.
 **Log every session in `docs/worklog.md`** (template in §6).
@@ -62,7 +62,7 @@
 - [x] `detector.py`: `if contra_id is None: continue` before `publish("contradiction.found", ...)`.
 - [x] Add `contradiction_exists(a, b)` in `shared/db.py` *(built as batched `existing_contradiction_partners(claim_id, other_ids)`)*; call it in `detector.py` **before** `evaluate_contradiction_pair` so redelivered messages don't redo NLI and LLM work.
 - [x] Test `tests/db/test_contradiction_dedupe.py`: insert (a,b), then (a,b), then (b,a) → 1 row, second and third calls return `None`.
-- [ ] Record in the worklog how many duplicate rows the migration deleted on your local DB (`SELECT COUNT(*) ...` before/after). *Pre-migration count taken 2026-10-30: 3 rows / 2 pairs → 1 to delete. Migration not yet applied to the dev volume.*
+- [x] Record in the worklog how many duplicate rows the migration deleted on your local DB (`SELECT COUNT(*) ...` before/after). *2026-10-30: 3 rows → 2 (1 duplicate).*
 
 ### F2. Duplicate insider transactions
 **Bug:** `insider_transactions` has no unique constraint, so the `ON CONFLICT DO NOTHING` in `form4_parser.py` never fires. Re-running Form 4 ingestion duplicates trades → duplicate surveillance tasks and inflated `sell_count` / `total_sell_value` in `summarize_insider_rows`, which can **wrongly bump a contradiction's severity**.
@@ -139,7 +139,7 @@
 
 - [x] In `detector.py`, per new claim: fetch candidates → drop pairs that already exist (F1) → `await asyncio.to_thread(score_pairs, all_pairs)` once → pass each pair's NLI result into `evaluate_contradiction_pair` (add an `nli` parameter so it doesn't recompute).
 - [x] Same `asyncio.to_thread` treatment for FinBERT and MiniLM calls in `claim-extractor/pipeline.py`.
-- [ ] Measure seconds per filing before and after on the same filing; record in the worklog.
+- [x] Measure seconds per filing before and after on the same filing; record in the worklog. *NLI ~1.6–2.5× faster; worst event-loop stall ~0.9 s → ~12 ms.*
 
 ### F7. Small fixes
 - [x] Dashboard mock mode: add `src/app/api/v1/surveillance/flags/route.ts` and `[id]/route.ts` with sample data, so the panel isn't empty in demo mode. (If you choose deployment option A, the `DataSource` work replaces mocks anyway; then skip this.)
@@ -150,7 +150,7 @@
 - [x] README: the "handlers are idempotent" sentence is now true; mention migrations and `scripts/migrate.py`.
 - [x] `CLAUDE.md` §3 (data model) and §13 (open items): new columns, constraints, migration runner.
 - [x] Worklog entry with duplicate counts removed, timings from F6, test counts.
-- [ ] Open PR #1 `fix/correctness` → `main`.
+- [x] Open PR #1 `fix/correctness` → `main`. (https://github.com/ketakiii3/papertrail/pull/1)
 
 **Manual check on the Docker stack (you run this; it can't be done from a Claude session without Docker):**
 ```bash

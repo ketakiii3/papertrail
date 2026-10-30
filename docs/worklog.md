@@ -4,6 +4,33 @@ One dated entry per working session, newest first. Record what was done, command
 
 ---
 
+## 2026-10-30 (later): Dev-DB migration, real Form 4 re-ingest, F6 timing
+
+**Done**
+- Backed up the dev DB (`pg_dump -Fc`, 2.8 MB, kept outside the repo), then ran `scripts/migrate.py` on it. Applied 001 + 002; a second run says "schema up to date".
+- Fixed the Form 4 download URL (`form4_xml_url`): filing documents are on `www.sec.gov/Archives/...`, not `data.sec.gov`, and `primaryDocument` (`xslF345X06/form4.xml`) is the XSL-rendered HTML; the raw XML is `form4.xml` one level up. **Every Form 4 download 404'd before this**, which is the real reason no real Form 4 run ever stored rows (CLAUDE.md §13 item 4). Unit test added.
+- Local-only `docker-compose.override.yml` (gitignored) maps compose Postgres to `127.0.0.1:55433`, because a native Postgres on the Mac holds 5432.
+
+**Measured**
+- Migration on dev DB: contradictions 3 rows → 2 (1 duplicate pair removed); insider rows 2 → 2, hand-seeded `S`/`P` normalized to `sell`/`buy`; surveillance flags 2 → 2.
+- Re-ingest AAPL (CIK 320193, last 40 submissions) twice: run 1 stored **80** rows, run 2 stored **0**; total stays 82. `insider.new` published 80 times, then 0.
+- AAPL code mix: S 35, M 22, A 13, F 9, G 2, P 1. Of 57 disposals (`D`), only 34 are open-market sales ($111.9M); the old A/D rule would have called all 57 "sells" ($241.3M), more than doubling the insider-selling signal.
+- Backfill dry run for AAPL selects 34 transactions (36 open-market − 2 already flagged); the 46 `other` rows are skipped.
+- F6, NLI only (cross-encoder/nli-deberta-v3-base, CPU in Docker; Apple M5 Max, 64 GB, Docker 18 CPUs / 6.2 GB), same pairs both ways, two rounds each:
+  | Workload | Old: per pair, sync on loop | New: batched per claim, `to_thread` |
+  |---|---|---|
+  | ADBE filing 24, 7 real candidate pairs | 5.1–7.2 pairs/s, loop stall 371–563 ms | 9.1–9.2 pairs/s, stall 5–6 ms |
+  | XOM filing 47 × 20 nearest claims (any company), 800 pairs | 4.9–6.7 pairs/s (120–163 s), stall 789–949 ms | 10.8–12.0 pairs/s (67–74 s), stall 11–12 ms |
+  The dev data has few companies with more than one filing, hence the second, synthetic-pairing workload for throughput.
+
+**Not done**
+- Surveillance tasks for the 80 new AAPL rows not run (consumer/worker not started); `surveillance.flag` follow-through still unverified.
+
+**Next**
+- Merge PR #1, then E1 (eval sampling). Optionally start the full stack and run the AAPL backfill for real.
+
+---
+
 ## 2026-10-30: Fixes F0–F8 on `fix/correctness`
 
 **Done**

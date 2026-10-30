@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from contradiction_detector.agent_tools import summarize_insider_rows
-from edgar_ingester.form4_parser import Form4Ingester, classify_transaction
+from edgar_ingester.form4_parser import Form4Ingester, classify_transaction, form4_xml_url
 
 FIXTURE = Path(__file__).parent / "fixtures" / "form4_sample.xml"
 
@@ -62,3 +62,13 @@ def test_tax_withholding_alone_is_not_large_insider_selling():
 def test_three_open_market_sells_is_large():
     rows = [{"transaction_type": "sell", "total_value": 10_000}] * 3
     assert summarize_insider_rows(rows)["large_insider_sales"] is True
+
+
+@pytest.mark.parametrize(
+    "primary_doc,expected_doc",
+    [("xslF345X06/form4.xml", "form4.xml"), ("xslF345X05/wf-form4_1.xml", "wf-form4_1.xml"),
+     ("form4.xml", "form4.xml")],
+)
+def test_form4_xml_url_points_at_raw_xml_on_www(primary_doc, expected_doc):
+    url = form4_xml_url("0000320193", "0001140361-26-035636", primary_doc)
+    assert url == f"https://www.sec.gov/Archives/edgar/data/320193/000114036126035636/{expected_doc}"
