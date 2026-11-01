@@ -70,6 +70,9 @@ CREATE TABLE IF NOT EXISTS contradictions (
 
 CREATE INDEX IF NOT EXISTS idx_contradictions_company ON contradictions(company_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_contradictions_severity ON contradictions(severity, created_at DESC);
+-- One row per unordered claim pair (migration 001)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_contradiction_pair
+    ON contradictions ((LEAST(claim_a_id, claim_b_id)), (GREATEST(claim_a_id, claim_b_id)));
 
 -- Insider Transactions (Form 4)
 CREATE TABLE IF NOT EXISTS insider_transactions (
@@ -77,16 +80,24 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
     company_id INT REFERENCES companies(id) ON DELETE CASCADE,
     insider_name TEXT NOT NULL,
     insider_title TEXT,
-    transaction_type VARCHAR(10) NOT NULL,
-    shares BIGINT,
+    transaction_type VARCHAR(10) NOT NULL,     -- buy (code P) / sell (code S) / other
+    transaction_code VARCHAR(2),               -- raw Form 4 code: P, S, F, G, M, X, A, ...
+    acquired_disposed CHAR(1),                 -- A / D
+    shares NUMERIC(18,4),
     price DECIMAL(12,2),
     total_value DECIMAL(15,2),
     transaction_date DATE NOT NULL,
     filing_date DATE NOT NULL,
+    accession_number VARCHAR(25),
+    line_no INT,                               -- position within the Form 4 document
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_insider_company ON insider_transactions(company_id, transaction_date DESC);
+-- Dedupe key for Form 4 rows (migration 002)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_insider_txn_line
+    ON insider_transactions (accession_number, line_no)
+    WHERE accession_number IS NOT NULL;
 
 -- Surveillance flags (event-study results per insider transaction)
 CREATE TABLE IF NOT EXISTS surveillance_flags (
@@ -120,3 +131,13 @@ CREATE TABLE IF NOT EXISTS watchlist (
     created_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(email, ticker)
 );
+
+-- Migrations already folded into this file, so scripts/migrate.py skips them on fresh installs
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO schema_migrations (version) VALUES
+    ('001_contradiction_pair_unique'),
+    ('002_insider_txn_unique')
+ON CONFLICT DO NOTHING;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -11,6 +12,7 @@ from shared.llm import generate_reasoning
 
 from .agent_tools import (
     check_negation,
+    nli_payload,
     semantic_compare,
     severity_score,
     summarize_insider_rows,
@@ -35,7 +37,7 @@ def _log_agent(event: str, **kwargs: Any) -> None:
     logger.info("[AGENT] %s %s", event, _short(kwargs))
 
 
-def _order_claim_pair(
+def order_claim_pair(
     claim_new: dict,
     candidate: dict,
 ) -> tuple[dict, dict, int, int]:
@@ -53,12 +55,16 @@ async def evaluate_contradiction_pair(
     candidate: dict,
     company: dict,
     vector_similarity: float,
+    nli: dict | None = None,
 ) -> dict | None:
     """
     Run the tool pipeline with logging. Returns a dict ready for insert_contradiction,
     or None if this pair is not treated as a contradiction.
+
+    `nli` is a precomputed `score_pairs` result for (older, newer) as ordered by
+    `order_claim_pair`; the detector batches NLI per claim. If None, it is scored here.
     """
-    ca, cb, id_a, id_b = _order_claim_pair(claim_new, candidate)
+    ca, cb, id_a, id_b = order_claim_pair(claim_new, candidate)
     _log_agent(
         "session_start",
         pair=f"{id_a}_vs_{id_b}",
@@ -71,7 +77,10 @@ async def evaluate_contradiction_pair(
     _log_tool("semantic_compare", sem)
 
     # 2) NLI
-    nli = check_negation(ca["claim_text"], cb["claim_text"])
+    if nli is None:
+        nli = await asyncio.to_thread(check_negation, ca["claim_text"], cb["claim_text"])
+    else:
+        nli = nli_payload(nli)
     _log_tool("check_negation", nli)
 
     if nli["contradiction"] < NLI_CONTRADICTION_THRESHOLD:

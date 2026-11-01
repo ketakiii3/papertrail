@@ -1,9 +1,6 @@
 """Tests for transcript parser."""
 
-import sys
-sys.path.insert(0, "/Users/ketaki.dabade/papertrail")
-
-from services.transcript_ingester.src.transcript_parser import (
+from transcript_ingester.transcript_parser import (
     parse_transcript,
     extract_speaker_claims,
     detect_title,

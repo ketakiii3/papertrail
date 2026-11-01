@@ -79,7 +79,7 @@ def _serialize(row, include_daily: bool = False) -> dict:
         "insider_title": row["insider_title"],
         "transaction_type": row["transaction_type"],
         "transaction_date": row["transaction_date"].isoformat() if row["transaction_date"] else None,
-        "shares": row["shares"],
+        "shares": float(row["shares"]) if row["shares"] is not None else None,
         "price": float(row["price"]) if row["price"] is not None else None,
         "total_value": float(row["total_value"]) if row["total_value"] is not None else None,
         "event_date": row["event_date"].isoformat() if row["event_date"] else None,

@@ -1,5 +1,7 @@
 # PaperTrail
 
+[![CI](https://github.com/ketakiii3/papertrail/actions/workflows/ci.yml/badge.svg)](https://github.com/ketakiii3/papertrail/actions/workflows/ci.yml)
+
 PaperTrail ingests SEC filings for S&P 500 names, extracts structured **claims**, detects **contradictions** between claims (pgvector similarity + NLI cross-encoder + an agent-tool pipeline), enriches with **insider (Form 4)** context, runs **event-study trade surveillance** (CAR + volume anomaly) on insider transactions, and exposes the results through a **FastAPI** backend and **Next.js** dashboard with a live WebSocket feed. A **Neo4j** graph mirrors claims, contradictions, and insider trade activity.
 
 ## Architecture (high level)
@@ -27,7 +29,7 @@ Inter-service eventing runs on **Redpanda** (Kafka-API broker, single binary, no
 | `insider.new` | edgar-ingester (Form 4) | `surveillance`, `graph-builders` |
 | `surveillance.flag` | celery-worker | `graph-builders`, `api-ws-fanout` |
 
-Delivery is at-least-once with manual offset commit — handlers are idempotent (DB ON CONFLICT, Neo4j MERGE keyed on stable IDs).
+Delivery is at-least-once with manual offset commit — handlers are idempotent: contradictions are unique per unordered claim pair, Form 4 rows per `(accession_number, line_no)`, surveillance flags per transaction (all enforced by unique indexes + `ON CONFLICT`), and Neo4j writes are MERGEs keyed on stable IDs. A redelivered `claims.extracted` message skips already-stored pairs before any NLI or LLM work.
 
 Contradiction detection includes explicit **agent tools** (`semantic_compare`, `check_negation`, `temporal_check`, `get_insider_context`, `severity_score`) with log lines prefixed `[AGENT]` and `[AGENT_TOOL]` in the detector service. See `docs/docker-dashboard-notes.md` for URLs, Ollama sizing, Neo4j queries, and troubleshooting.
 
@@ -51,6 +53,14 @@ Pull the configured Ollama model once (default is `tinyllama`, sized for CPU):
 docker compose exec ollama ollama pull tinyllama
 ```
 
+**Existing database?** `infra/init.sql` only runs when the Postgres volume is first created. Schema changes after that ship as numbered files in `infra/migrations/`; apply any pending ones with:
+
+```bash
+docker compose run --rm --no-deps \
+  -v "$(pwd)/scripts:/app/scripts" -v "$(pwd)/infra:/app/infra" \
+  api-server python -m scripts.migrate          # add --dry-run to list only
+```
+
 Then open:
 
 | Service | URL |
@@ -71,6 +81,7 @@ The `surveillance` + `celery-worker` services flag insider Form 4 transactions w
 - **Market model:** OLS `r_i = α + β·r_m + ε` on T1, with `SURV_MARKET_INDEX` (SPY) as benchmark.
 - **Flag if:** `|z| > SURV_CAR_Z_THRESHOLD` (default 2.0) **AND** `vol_ratio > SURV_VOLUME_THRESHOLD` (default 1.5), where `z = CAR / (σ_AR · √N)` and `vol_ratio = mean(Vol on T2) / mean(Vol on T1)`.
 - **Defers** (Celery retry, 2-day countdown) when the event window hasn't elapsed yet — no look-ahead bias.
+- **Open-market trades only.** Form 4 code `P` → `buy`, `S` → `sell`; everything else (tax withholding `F`, gifts `G`, option exercises `M`/`X`, grants `A`, ...) is stored as `other` with its raw `transaction_code`, gets no event study, and doesn't count toward the contradiction detector's insider-selling escalation.
 
 Tuning knobs (all environment-driven):
 
@@ -136,6 +147,23 @@ npm run dev
 
 Leave `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` **unset** so the app uses built-in Next.js route handlers with sample data (`src/app/api/v1/...`).
 
+## Tests
+
+```bash
+python -m venv .venv && .venv/bin/pip install -r requirements-test.txt
+.venv/bin/pytest -q -m "not db and not models"        # no Docker needed
+```
+
+DB tests (`-m db`) need a Postgres with pgvector they can create throwaway databases on:
+
+```bash
+docker run -d --rm --name pt-test-pg -p 127.0.0.1:55432:5432 \
+  -e POSTGRES_USER=papertrail -e POSTGRES_PASSWORD=papertrail pgvector/pgvector:pg16
+TEST_DATABASE_URL=postgresql://papertrail:papertrail@localhost:55432/postgres .venv/bin/pytest -q
+```
+
+CI (`.github/workflows/ci.yml`) runs both, plus the dashboard lint + build.
+
 ## Viewing agent + tool logs
 
 ```bash
@@ -157,9 +185,9 @@ docker compose logs -f graph-builder            # Neo4j upserts
 │   ├── graph-builder/          # Neo4j sync (4 Kafka consumers)
 │   └── api-server/             # FastAPI + WS fanout
 ├── shared/             # DB, Redis, Kafka, Celery, LLM helpers
-├── infra/              # Postgres schema (init.sql)
-├── scripts/            # Dev-only helpers (Kafka smoke test)
-├── tests/              # Unit tests for severity, splitter, transcript parser
+├── infra/              # Postgres schema (init.sql) + migrations/
+├── scripts/            # Dev-only helpers (migrate.py, Kafka smoke test)
+├── tests/              # Unit tests + tests/db (Postgres) + fixtures
 ├── docs/               # PRDs, build plan, Docker / API notes
 └── docker-compose.yml
 ```

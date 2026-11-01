@@ -77,23 +77,27 @@ def semantic_compare(
     }
 
 
-def check_negation(claim_a_text: str, claim_b_text: str) -> dict[str, Any]:
-    """Tool: NLI cross-encoder — entailment / neutral / contradiction probabilities."""
-    results = score_pairs([(claim_a_text, claim_b_text)])
-    if not results:
+def nli_payload(r: dict | None) -> dict[str, Any]:
+    """Normalize one `score_pairs` result into the check_negation output shape."""
+    if not r:
         return {
             "contradiction": 0.0,
             "entailment": 0.0,
             "neutral": 0.0,
             "predicted_label": "neutral",
         }
-    r = results[0]
     return {
         "contradiction": r["contradiction"],
         "entailment": r["entailment"],
         "neutral": r["neutral"],
         "predicted_label": r["predicted_label"],
     }
+
+
+def check_negation(claim_a_text: str, claim_b_text: str) -> dict[str, Any]:
+    """Tool: NLI cross-encoder — entailment / neutral / contradiction probabilities."""
+    results = score_pairs([(claim_a_text, claim_b_text)])
+    return nli_payload(results[0] if results else None)
 
 
 def temporal_check(
@@ -146,20 +150,26 @@ def severity_score(
 
 
 def summarize_insider_rows(rows: list[dict]) -> dict[str, Any]:
-    """Derive flags from raw insider_transactions rows."""
+    """Derive flags from raw insider_transactions rows.
+
+    Only open-market trades count (transaction_type buy/sell, i.e. Form 4 codes
+    P/S). Tax withholding, gifts, option exercises etc. are typed "other" and
+    reported separately so they can't trigger `large_insider_sales`.
+    """
     if not rows:
         return {
             "transaction_count": 0,
             "sell_count": 0,
+            "buy_count": 0,
+            "other_count": 0,
             "total_sell_value": 0.0,
             "large_insider_sales": False,
             "summary": "No insider transactions in window",
         }
-    sells = [
-        r
-        for r in rows
-        if str(r.get("transaction_type", "")).lower() in ("sell", "s", "sale")
-    ]
+    kinds = [str(r.get("transaction_type", "")).lower() for r in rows]
+    sells = [r for r, k in zip(rows, kinds) if k == "sell"]
+    buy_count = kinds.count("buy")
+    other_count = len(rows) - len(sells) - buy_count
     total = 0.0
     for r in sells:
         v = r.get("total_value")
@@ -169,7 +179,12 @@ def summarize_insider_rows(rows: list[dict]) -> dict[str, Any]:
     return {
         "transaction_count": len(rows),
         "sell_count": len(sells),
+        "buy_count": buy_count,
+        "other_count": other_count,
         "total_sell_value": round(total, 2),
         "large_insider_sales": large,
-        "summary": f"{len(sells)} sells, ~${total:,.0f} notional in window",
+        "summary": (
+            f"{len(sells)} open-market sells (~${total:,.0f}), {buy_count} buys, "
+            f"{other_count} other (tax/gift/option) in window"
+        ),
     }

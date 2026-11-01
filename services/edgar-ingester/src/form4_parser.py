@@ -14,7 +14,29 @@ from shared.kafka_client import publish
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://data.sec.gov"
+BASE_URL = "https://data.sec.gov"           # submissions JSON
+ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data"  # filing documents
+
+# Form 4 transaction codes that are open-market trades. Everything else
+# (F = tax withholding, G = gift, M/X = option exercise, A = grant, ...) is
+# "other": it moves shares but says nothing about the insider's view.
+OPEN_MARKET_TYPES = {"P": "buy", "S": "sell"}
+
+
+def form4_xml_url(cik: str, accession: str, primary_doc: str) -> str:
+    """URL of a Form 4's raw XML.
+
+    Filing documents live on www.sec.gov, not data.sec.gov. `primaryDocument`
+    usually names the XSL-rendered HTML view ("xslF345X06/form4.xml"); the raw
+    XML the parser needs is the same file name without the xsl directory.
+    """
+    doc = re.sub(r"^xsl[^/]*/", "", primary_doc)
+    return f"{ARCHIVES_URL}/{int(cik)}/{accession.replace('-', '')}/{doc}"
+
+
+def classify_transaction(code: str) -> str:
+    """Map a Form 4 transaction code to buy / sell / other."""
+    return OPEN_MARKET_TYPES.get((code or "").strip().upper(), "other")
 
 
 class Form4Ingester:
@@ -67,9 +89,8 @@ class Form4Ingester:
                 continue
 
             accession = accessions[i]
-            accession_no_dash = accession.replace("-", "")
             primary_doc = primary_docs[i] if i < len(primary_docs) else ""
-            doc_url = f"{BASE_URL}/Archives/edgar/data/{cik_padded}/{accession_no_dash}/{primary_doc}"
+            doc_url = form4_xml_url(cik, accession, primary_doc)
 
             filings.append({
                 "accession_number": accession,
@@ -81,7 +102,11 @@ class Form4Ingester:
         return filings
 
     def parse_form4_xml(self, xml_text: str) -> list[dict]:
-        """Parse Form 4 XML into structured insider transaction records."""
+        """Parse Form 4 XML into structured insider transaction records.
+
+        Order is stable (non-derivative table, then derivative table, each in
+        document order) because the index is stored as `line_no`, the dedupe key.
+        """
         transactions = []
 
         try:
@@ -152,13 +177,7 @@ class Form4Ingester:
         txn_code = code_el.text.strip() if code_el is not None and code_el.text else ""
         acq_disp = acq_disp_el.text.strip() if acq_disp_el is not None and acq_disp_el.text else ""
 
-        # Map to buy/sell
-        if acq_disp == "D":
-            txn_type = "sell"
-        elif acq_disp == "A":
-            txn_type = "buy"
-        else:
-            txn_type = txn_code  # fallback
+        txn_type = classify_transaction(txn_code)
 
         # Shares
         shares_el = txn_el.find(".//transactionAmounts/transactionShares/value")
@@ -184,6 +203,8 @@ class Form4Ingester:
             "insider_name": owner_name,
             "insider_title": owner_title,
             "transaction_type": txn_type,
+            "transaction_code": txn_code[:2] or None,
+            "acquired_disposed": acq_disp[:1] or None,
             "shares": shares,
             "price": price,
             "total_value": total_value,
@@ -209,43 +230,88 @@ class Form4Ingester:
                 continue
 
             filed_at = datetime.strptime(f["filed_at"], "%Y-%m-%d").date()
-
-            for txn in transactions:
-                try:
-                    txn_id = await pool.fetchval(
-                        """INSERT INTO insider_transactions
-                           (company_id, insider_name, insider_title, transaction_type,
-                            shares, price, total_value, transaction_date, filing_date)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                           ON CONFLICT DO NOTHING
-                           RETURNING id""",
-                        company_id,
-                        txn["insider_name"],
-                        txn["insider_title"],
-                        txn["transaction_type"],
-                        txn["shares"],
-                        txn["price"],
-                        txn["total_value"],
-                        txn["transaction_date"],
-                        filed_at,
-                    )
-                    if txn_id is None:
-                        continue  # ON CONFLICT swallowed it; nothing new to publish
-                    new_count += 1
-                    await publish("insider.new", {
-                        "transaction_id": txn_id,
-                        "company_id": company_id,
-                        "insider_name": txn["insider_name"],
-                        "transaction_type": txn["transaction_type"],
-                        "transaction_date": txn["transaction_date"].isoformat()
-                            if hasattr(txn["transaction_date"], "isoformat")
-                            else txn["transaction_date"],
-                    })
-                except Exception as e:
-                    logger.warning(f"Failed to insert transaction: {e}")
+            new_count += await store_transactions(
+                pool, company_id, f["accession_number"], filed_at, transactions
+            )
 
         logger.info(f"Ingested {new_count} insider transactions for company {company_id}")
         return new_count
+
+
+async def _adopt_legacy_row(pool, company_id: int, accession_number: str,
+                            line_no: int, txn: dict) -> bool:
+    """Rows stored before migration 002 have no accession number. If one matches
+    this trade, give it the key and the corrected classification instead of
+    inserting a duplicate. Legacy rows were typed sell for any D, buy for any A."""
+    legacy_type = {"D": "sell", "A": "buy"}.get(txn.get("acquired_disposed") or "")
+    if legacy_type is None:
+        return False
+    adopted = await pool.fetchval(
+        """UPDATE insider_transactions
+           SET accession_number = $1, line_no = $2, transaction_type = $3,
+               transaction_code = $4, acquired_disposed = $5
+           WHERE id = (
+               SELECT id FROM insider_transactions
+               WHERE accession_number IS NULL AND company_id = $6
+                 AND insider_name = $7 AND transaction_date = $8
+                 AND transaction_type = $9
+                 AND shares = $10 AND price = ROUND($11::numeric, 2)
+               ORDER BY id LIMIT 1)
+           RETURNING id""",
+        accession_number, line_no, txn["transaction_type"],
+        txn.get("transaction_code"), txn.get("acquired_disposed"),
+        company_id, txn["insider_name"], txn["transaction_date"], legacy_type,
+        txn["shares"], txn["price"],
+    )
+    return adopted is not None
+
+
+async def store_transactions(pool, company_id: int, accession_number: str,
+                             filed_at, transactions: list[dict]) -> int:
+    """Insert parsed rows keyed by (accession_number, line_no); publish insider.new for new rows only."""
+    new_count = 0
+    for line_no, txn in enumerate(transactions):
+        try:
+            if await _adopt_legacy_row(pool, company_id, accession_number, line_no, txn):
+                continue  # pre-migration row for this trade; now keyed, already published
+            txn_id = await pool.fetchval(
+                """INSERT INTO insider_transactions
+                   (company_id, insider_name, insider_title, transaction_type,
+                    transaction_code, acquired_disposed, shares, price, total_value,
+                    transaction_date, filing_date, accession_number, line_no)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                   ON CONFLICT (accession_number, line_no) WHERE accession_number IS NOT NULL
+                   DO NOTHING
+                   RETURNING id""",
+                company_id,
+                txn["insider_name"],
+                txn["insider_title"],
+                txn["transaction_type"],
+                txn.get("transaction_code"),
+                txn.get("acquired_disposed"),
+                txn["shares"],
+                txn["price"],
+                txn["total_value"],
+                txn["transaction_date"],
+                filed_at,
+                accession_number,
+                line_no,
+            )
+            if txn_id is None:
+                continue  # already stored; nothing new to publish
+            new_count += 1
+            await publish("insider.new", {
+                "transaction_id": txn_id,
+                "company_id": company_id,
+                "insider_name": txn["insider_name"],
+                "transaction_type": txn["transaction_type"],
+                "transaction_date": txn["transaction_date"].isoformat()
+                    if hasattr(txn["transaction_date"], "isoformat")
+                    else txn["transaction_date"],
+            })
+        except Exception as e:
+            logger.warning(f"Failed to insert transaction: {e}")
+    return new_count
 
 
 async def run_form4_ingestion():

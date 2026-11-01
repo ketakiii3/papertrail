@@ -114,13 +114,13 @@ papertrail/
 
 ## 3. Data model (Postgres)
 
-All in `infra/init.sql`. Key tables:
+All in `infra/init.sql`; changes to existing databases ship as `infra/migrations/NNN_*.sql`, applied by `scripts/migrate.py` (tracked in `schema_migrations`, also folded into `init.sql`). Key tables:
 
 - **companies** — ticker, name, cik (unique), sector, industry, sp500 flag
 - **filings** — accession_number (unique), form_type, filed_at, period_of_report, url, `raw_text` (full text dump), processed flag
 - **claims** — filing_id, company_id, claim_text, claim_type, topic, sentiment, confidence, `entities jsonb`, temporal_ref, source_section, `embedding vector(384)`, claim_date
-- **contradictions** — claim_a_id, claim_b_id, similarity_score, nli_contradiction_score, severity, time_gap_days, explanation (rule-based), agent_reasoning (Ollama)
-- **insider_transactions** — insider_name/title, transaction_type (buy/sell), shares, price, total_value, transaction_date, filing_date
+- **contradictions** — claim_a_id, claim_b_id, similarity_score, nli_contradiction_score, severity, time_gap_days, explanation (rule-based), agent_reasoning (Ollama). Unique per unordered pair (`uq_contradiction_pair` on LEAST/GREATEST; migration 001)
+- **insider_transactions** — insider_name/title, transaction_type (`buy` = code P, `sell` = code S, `other` = F/G/M/X/A/...), transaction_code, acquired_disposed, shares `NUMERIC(18,4)`, price, total_value, transaction_date, filing_date, accession_number, line_no. Unique on `(accession_number, line_no)` (migration 002); pre-migration rows without an accession are adopted by the ingester on re-ingest
 - **surveillance_flags** — UNIQUE on transaction_id, CAR, car_zscore, volume_ratio, baseline α/β/R², `daily_ar jsonb`, flagged, flag_reason
 - **watchlist** — email + ticker (composite unique)
 
@@ -135,7 +135,7 @@ Postgres extension `vector` is required; `pgvector/pgvector:pg16` provides it. E
 1. `semantic_compare(ca, cb, cosine)` — topic overlap + shared-entity hits + short summary
 2. `check_negation(text_a, text_b)` — cross-encoder NLI (`cross-encoder/nli-deberta-v3-base`), softmax → {contradiction, entailment, neutral}. Below `NLI_CONTRADICTION_THRESHOLD = 0.6` → bail out
 3. `temporal_check(ca, cb)` — gap in days, b-after-a ordering
-4. `get_insider_context` — pulls Form 4 rows between the two claim dates and rolls them up via `summarize_insider_rows` (counts sells, sums notional, marks `large_insider_sales` if ≥$500k or ≥3 sells)
+4. `get_insider_context` — pulls Form 4 rows between the two claim dates and rolls them up via `summarize_insider_rows` (open-market only: counts sells/buys, reports `other` separately, sums sell notional, marks `large_insider_sales` if ≥$500k or ≥3 sells)
 5. `severity_score(...)` — base severity from `classify_severity()` (weighted NLI + similarity + recency boost), escalated one bucket on `large_insider_sales`
 6. `generate_reasoning(...)` — Ollama produces a 2–3 sentence analyst narrative using the full tool digest
 
@@ -322,12 +322,12 @@ End-to-end was last verified 2026-04-26 with two seeded AAPL transactions (Tim C
 1. **Threshold tuning run.** User needs to run `docker compose run --rm --no-deps surveillance python -m surveillance.backfill --dry-run`, then without `--dry-run`, then check `SELECT COUNT(*) FILTER (WHERE flagged) * 1.0 / NULLIF(COUNT(*),0) FROM surveillance_flags` against the 5–15% band, adjust `SURV_CAR_Z_THRESHOLD` / `SURV_VOLUME_THRESHOLD` in `.env`, and re-run with `--overwrite`. Record the final chosen thresholds + observed flag rate in the `docs/surveillance-plan.md` decision log.
 2. **Screenshots** for the README: `docs/img/flower.png` (Flower with at least one SUCCESS task) and `docs/img/surveillance-panel.png` (dashboard panel + drawer with AR chart).
 3. **Visual verification of dashboard.** M5 caveat: the panel renders without TS/runtime errors but layout was never eyeballed live. Open `http://localhost:3000` after `docker compose up`.
-4. **Form 4 ingester real-CIK verification.** `form4_parser.fetch_form4_filings` no longer hardcodes `xslF345X05/` — it uses `primaryDocument` from EDGAR submissions JSON. Code-level fix is in, but no real (non-seeded) end-to-end run is documented yet. Run `docker compose exec edgar-ingester python -c "import asyncio; from src.form4_parser import run_form4_ingestion; asyncio.run(run_form4_ingestion())"` against a real S&P 500 CIK and confirm `insider_transactions` rows appear, then `surveillance.flag` events follow.
+4. **Form 4 ingester real-CIK verification.** Partly done 2026-10-30: downloads were 404ing (wrong host + XSL path); fixed in `form4_xml_url`, and an AAPL re-ingest stored 80 real rows, 0 on the second run. Still unverified: `surveillance.flag` events following from them (needs the surveillance consumer + Celery worker running). Run `docker compose exec edgar-ingester python -c "import asyncio; from src.form4_parser import run_form4_ingestion; asyncio.run(run_form4_ingestion())"` against a real S&P 500 CIK and confirm `insider_transactions` rows appear, then `surveillance.flag` events follow.
 5. **Optional `InsiderTimeline.tsx`** — deferred indefinitely (drawer already covers the single-event view; only worth it once many flagged events exist to compare).
 
 ### Other small things
 
-- `tests/` (root) has 3 tests for `severity_scorer`, `splitter`, `transcript_parser`. `services/surveillance/tests/test_event_study.py` has 8 tests. There is no top-level test runner / CI config.
+- Tests run from the repo root: `pytest -q -m "not db and not models"` (root `conftest.py` aliases the hyphenated service folders as `claim_extractor`, `contradiction_detector`, `edgar_ingester`, `surveillance`, ...). DB tests in `tests/db/` need `TEST_DATABASE_URL`. CI in `.github/workflows/ci.yml` (pytest with a pgvector service, dashboard lint + build, advisory pip-audit/npm audit). Fix PR #1 (`fix/correctness`, F0–F8) status is in `docs/fixes-and-tool-calling-plan.md`.
 - No license file.
 - `scripts/` is dev-only (not baked into images); must be bind-mounted to run.
 - Dashboard has a `vercel.json` but no Vercel deploy is documented in the repo.
@@ -374,3 +374,11 @@ Deferred (separate PRs, in priority order):
 - `services/surveillance/Dockerfile` is reused for both the Kafka-consumer container and the Celery worker (different `command:` in compose).
 - The api-server's `lifespan` cancels the WS fanout task on shutdown — when adding new Kafka consumers there, plug them into `start_ws_fanout` rather than starting standalone tasks.
 - Local LLM (Ollama) is *optional* for contradiction storage — `generate_reasoning` returns `None` if Ollama is unreachable and `agent_reasoning` simply ends up NULL. Don't gate the pipeline on LLM availability.
+
+## 17. Plans and worklog (2026-10-29/30)
+
+Read these before resuming work, and update them as work lands:
+- **`docs/fixes-and-tool-calling-plan.md`**: the active plan. Fixes F0–F8 (duplicate contradictions, duplicate/misclassified Form 4 trades, runnable tests, CI, NLI batching), eval set E1–E3, real LLM tool calling T1–T8. LLM is local only for now: Ollama running natively on the Mac, default `qwen3:4b` (no hosted API).
+- **`docs/deployment-options.md`**: hosting comparison; recommended first deploy is a static JSON snapshot on Vercel.
+- **`docs/lite-deploy-plan.md`**: Neon + nightly GitHub Actions deployment (option C, for later).
+- **`docs/worklog.md`**: one dated entry per session, newest first.

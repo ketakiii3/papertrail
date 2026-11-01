@@ -41,6 +41,11 @@ interface FlagDetail extends Flag {
   daily_ar: { date: string; ret: number; expected: number; ar: number }[];
 }
 
+// transaction_type is "buy" / "sell" (Form 4 codes P / S) or "other"
+function tradeLabel(type: string): string {
+  return type === "buy" ? "BUY" : type === "sell" ? "SELL" : type.toUpperCase();
+}
+
 function fmtPct(v: number | null, digits = 2): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return `${(v * 100).toFixed(digits)}%`;
@@ -78,7 +83,7 @@ export default function SurveillancePanel() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
-    const url = `${API}/api/v1/surveillance/flags${onlyFlagged ? "?flagged=true" : ""}&limit=50`.replace("?&", "?");
+    const url = `${API}/api/v1/surveillance/flags?limit=50${onlyFlagged ? "&flagged=true" : ""}`;
     fetch(url)
       .then((r) => (r.ok ? r.json() : []))
       .then(setFlags)
@@ -153,8 +158,8 @@ export default function SurveillancePanel() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                    <span className={f.transaction_type === "P" ? "text-emerald-600" : "text-rose-600"}>
-                      {f.transaction_type === "P" ? "BUY" : f.transaction_type === "S" ? "SELL" : f.transaction_type}
+                    <span className={f.transaction_type === "buy" ? "text-emerald-600" : "text-rose-600"}>
+                      {tradeLabel(f.transaction_type)}
                     </span>{" "}
                     <span className="text-[11px] text-[var(--text-muted)]">{f.transaction_date}</span>
                   </td>
@@ -277,7 +282,7 @@ export default function SurveillancePanel() {
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Trade</div>
                   <div className="font-mono text-warm-800 mt-1">
-                    {selected.transaction_type === "P" ? "BUY" : "SELL"} · {selected.shares?.toLocaleString()} sh<br />
+                    {tradeLabel(selected.transaction_type)} · {selected.shares?.toLocaleString()} sh<br />
                     @ ${selected.price?.toFixed(2)}<br />
                     {selected.total_value && `$${(selected.total_value / 1_000_000).toFixed(1)}M`}
                   </div>

@@ -145,7 +145,7 @@ async def get_insider_transactions(
         raise HTTPException(404, f"Company {ticker} not found")
 
     query = """
-        SELECT id, insider_name, insider_title, transaction_type,
+        SELECT id, insider_name, insider_title, transaction_type, transaction_code,
                shares, price, total_value, transaction_date, filing_date
         FROM insider_transactions
         WHERE company_id = $1

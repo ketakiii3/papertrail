@@ -1,5 +1,6 @@
 """Main claim extraction pipeline orchestrator."""
 
+import asyncio
 import json
 import logging
 import sys
@@ -68,7 +69,8 @@ async def process_filing(filing_id: int, company_id: int):
     # Step 3: Classify sentiment with FinBERT
     claim_texts = [c["text"] for c in all_claims]
     classifier = get_classifier()
-    sentiments = classifier.classify_sentiment(claim_texts)
+    # Model calls run in a thread so they don't block the event loop (Kafka heartbeats)
+    sentiments = await asyncio.to_thread(classifier.classify_sentiment, claim_texts)
 
     # Step 4: Extract entities and classify
     for i, claim in enumerate(all_claims):
@@ -80,7 +82,7 @@ async def process_filing(filing_id: int, company_id: int):
         claim["temporal_ref"] = extract_temporal_ref(claim["text"])
 
     # Step 5: Generate embeddings
-    embeddings = embed_texts(claim_texts)
+    embeddings = await asyncio.to_thread(embed_texts, claim_texts)
 
     # Step 6: Prepare for DB insertion
     db_claims = []

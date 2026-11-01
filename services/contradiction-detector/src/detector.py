@@ -1,15 +1,23 @@
 """Main contradiction detection pipeline."""
 
+import asyncio
 import logging
 import sys
 
 sys.path.insert(0, "/app")
 
-from shared.db import get_pool, get_similar_claims, get_company_by_id, insert_contradiction
+from shared.db import (
+    existing_contradiction_partners,
+    get_company_by_id,
+    get_pool,
+    get_similar_claims,
+    insert_contradiction,
+)
 from shared.kafka_client import publish, consume
 from shared.llm import ensure_model_available
 
-from .agent import evaluate_contradiction_pair
+from .agent import evaluate_contradiction_pair, order_claim_pair
+from .nli_scorer import score_pairs
 
 logger = logging.getLogger(__name__)
 
@@ -63,18 +71,29 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
             threshold=SIMILARITY_THRESHOLD,
         )
 
+        # Redelivered messages / backfills: skip pairs already stored, before any NLI or LLM work
+        known = await existing_contradiction_partners(claim["id"], [c["id"] for c in candidates])
+        candidates = [c for c in candidates if c["id"] not in known]
         if not candidates:
             continue
 
         claim_d = _claim_row(claim)
+        cand_ds = [_claim_row(c) for c in candidates]
 
-        for candidate in candidates:
-            cand_d = _claim_row(candidate)
+        # One batched NLI call per claim, off the event loop. Pairs are ordered
+        # (older, newer) exactly as evaluate_contradiction_pair orders them.
+        ordered = [order_claim_pair(claim_d, cd) for cd in cand_ds]
+        nli_results = await asyncio.to_thread(
+            score_pairs, [(ca["claim_text"], cb["claim_text"]) for ca, cb, _, _ in ordered]
+        )
+
+        for candidate, cand_d, nli in zip(candidates, cand_ds, nli_results):
             outcome = await evaluate_contradiction_pair(
                 claim_d,
                 cand_d,
                 company,
                 float(candidate["similarity"]),
+                nli=nli,
             )
             if not outcome:
                 continue
@@ -90,6 +109,8 @@ async def detect_contradictions_for_filing(filing_id: int, company_id: int):
                 explanation=outcome["explanation"],
                 agent_reasoning=outcome["agent_reasoning"],
             )
+            if contra_id is None:
+                continue  # pair stored concurrently or in the reverse order; already published
 
             await publish("contradiction.found", {
                 "contradiction_id": contra_id,

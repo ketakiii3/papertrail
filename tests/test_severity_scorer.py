@@ -1,9 +1,6 @@
 """Tests for severity scoring model."""
 
-import sys
-sys.path.insert(0, "/Users/ketaki.dabade/papertrail")
-
-from models.severity_scorer.scorer import score_severity, SeverityInput, compute_specificity
+from severity_scorer.scorer import score_severity, SeverityInput, compute_specificity
 
 
 def test_high_severity_contradiction():

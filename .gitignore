@@ -1,4 +1,4 @@
-__pycache__/
+**/__pycache__/
 *.pyc
 .env
 .env.local
@@ -9,5 +9,9 @@ build/
 .venv/
 node_modules/
 .next/
-.DS_Store
+**/.DS_Store
 *.log
+
+# Local compose tweaks (e.g. port remaps)
+docker-compose.override.yml
+.claude/launch.json
