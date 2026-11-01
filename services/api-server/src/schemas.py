@@ -78,6 +78,10 @@ class ContradictionResponse(BaseModel):
     time_gap_days: Optional[int] = None
     explanation: Optional[str] = None
     agent_reasoning: Optional[str] = None
+    # Checker agent (None until checked): real | materialized_risk | update | boilerplate | scope | noise
+    verdict: Optional[str] = None
+    agent_confidence: Optional[float] = None
+    agent_run_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
     @field_validator("similarity_score", "nli_contradiction_score", mode="before")
@@ -115,3 +119,21 @@ class StatsResponse(BaseModel):
 class WatchlistRequest(BaseModel):
     email: EmailStr
     ticker: str
+
+
+class AgentTraceResponse(BaseModel):
+    """One checker-agent run: every tool call in order and the submitted verdict."""
+    id: int
+    contradiction_id: int
+    provider: str
+    model: str
+    prompt_version: str
+    trace: list
+    verdict: Optional[dict] = None
+    tool_calls: Optional[int] = None
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    latency_ms: Optional[int] = None
+    stop_reason: str
+    error: Optional[str] = None
+    created_at: Optional[datetime] = None

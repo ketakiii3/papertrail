@@ -1,12 +1,13 @@
 """Search and global contradiction endpoints."""
 
+import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from shared.db import get_pool
-from src.schemas import ContradictionResponse, ClaimResponse, SearchResult, StatsResponse
+from src.schemas import AgentTraceResponse, ContradictionResponse, ClaimResponse, SearchResult, StatsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
@@ -98,7 +99,7 @@ async def get_latest_contradictions(
 
     query = """
         SELECT con.id, con.similarity_score, con.nli_contradiction_score,
-               con.severity, con.time_gap_days, con.explanation, con.agent_reasoning,
+               con.severity, con.time_gap_days, con.explanation, con.agent_reasoning, con.verdict, con.agent_confidence, con.agent_run_id,
                con.created_at,
                co.ticker, co.name as company_name,
                ca.id as ca_id, ca.filing_id as ca_filing_id, ca.claim_text as ca_text,
@@ -155,10 +156,30 @@ async def get_latest_contradictions(
             time_gap_days=r["time_gap_days"],
             explanation=r["explanation"],
             agent_reasoning=r["agent_reasoning"],
+            verdict=r["verdict"], agent_confidence=r["agent_confidence"], agent_run_id=r["agent_run_id"],
             created_at=r["created_at"],
         ))
 
     return results
+
+
+@router.get("/contradictions/{contradiction_id}/trace", response_model=AgentTraceResponse)
+async def get_contradiction_trace(contradiction_id: int):
+    """How the checker agent judged this pair: its tool calls in order and the verdict (latest run)."""
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        """SELECT * FROM agent_runs WHERE contradiction_id = $1
+           ORDER BY (stop_reason <> 'error') DESC, created_at DESC LIMIT 1""",
+        contradiction_id,
+    )
+    if not row:
+        raise HTTPException(404, f"No checker run for contradiction {contradiction_id}")
+    out = dict(row)
+    # JSONB comes back from asyncpg as a string
+    out["trace"] = json.loads(out["trace"]) if isinstance(out["trace"], str) else out["trace"]
+    if isinstance(out["verdict"], str):
+        out["verdict"] = json.loads(out["verdict"])
+    return out
 
 
 @router.get("/stats", response_model=StatsResponse)

@@ -51,7 +51,7 @@ async def test_legacy_database_is_deduped_and_constrained(make_db):
         await conn.close()
 
     applied = await migrate(url)
-    assert applied == ["001_contradiction_pair_unique", "002_insider_txn_unique"]
+    assert applied == ["001_contradiction_pair_unique", "002_insider_txn_unique", "003_agent_runs"]
     assert await migrate(url) == []  # idempotent
 
     conn = await asyncpg.connect(url)

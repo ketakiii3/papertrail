@@ -13,6 +13,13 @@ class Settings:
     OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://ollama:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "tinyllama")
     KAFKA_BOOTSTRAP_SERVERS: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")
+    # Checker agent (LangChain tool calling). Needs a tool-capable model; tinyllama is not one.
+    CHECKER_ENABLED: bool = os.getenv("CHECKER_ENABLED", "true").lower() == "true"
+    CHECKER_MODEL: str = os.getenv("CHECKER_MODEL", "qwen3:4b")
+    CHECKER_OLLAMA_URL: str = os.getenv("CHECKER_OLLAMA_URL", os.getenv("OLLAMA_URL", "http://ollama:11434"))
+    CHECKER_MAX_TOOL_CALLS: int = int(os.getenv("CHECKER_MAX_TOOL_CALLS", "3"))
+    # Qwen3 "thinking": unset = model default, "true"/"false" to force
+    CHECKER_THINK: str = os.getenv("CHECKER_THINK", "")
 
 
 settings = Settings()
