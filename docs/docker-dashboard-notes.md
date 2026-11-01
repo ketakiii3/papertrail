@@ -70,6 +70,45 @@ Running only one service (e.g. `docker compose up dashboard`) still brings up **
 
 The **claim-extractor** image **pre-downloads** FinBERT and the **sentence-transformers** embedding model at **image build** time (see `services/claim-extractor/Dockerfile`), so the first filing after deploy should not wait on Hugging Face. If you use an old image built before that step, the **first** run may still download models into the container cache. Anonymous Hub access may warn about **`HF_TOKEN`**; a token is optional but can help with rate limits.
 
+## Dashboard shows "Sample Insider A/B/C": you're in demo mode
+
+Those names only exist in the built-in mock routes (`dashboard/src/app/api/v1/surveillance/`). You see them when the page you opened has no API URL:
+
+- `npm run dev` / `npm start` in `dashboard/` reads `dashboard/.env.local`, which leaves `NEXT_PUBLIC_API_URL` empty on purpose (Vercel demo mode).
+- The `dashboard-demo` preview in `.claude/launch.json` serves the same demo build on **port 3100**. Check the port in the address bar.
+
+To see real data, run the API and point the dashboard at it:
+
+```bash
+docker compose up -d --build postgres redis redpanda surveillance celery-worker graph-builder api-server dashboard
+# open http://localhost:3000 (Docker dashboard, already points at localhost:8000)
+# or, for the dev server on 3000:
+cd dashboard && NEXT_PUBLIC_API_URL=http://localhost:8000 NEXT_PUBLIC_WS_URL=ws://localhost:8000 npm run dev
+```
+
+`curl http://localhost:8000/health` must return `{"status":"ok",...}`; if it doesn't, the dashboard has nothing real to show.
+
+**Port 5432 already in use?** A native Postgres on the host holds it. Create a gitignored `docker-compose.override.yml`:
+
+```yaml
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:55433:5432"
+```
+
+## Verifying surveillance end to end
+
+1. Re-ingest one company's Form 4s (each new row publishes `insider.new`; a second run should store 0).
+2. `docker compose logs -f surveillance`: "enqueued event study" for buys/sells, "not open-market; no event study" for everything else.
+3. `docker compose logs -f celery-worker` or Flower (http://localhost:5555): tasks succeed, or retry if the 5-day event window hasn't passed.
+4. Results:
+   ```bash
+   docker compose exec postgres psql -U papertrail -c "SELECT flagged, flag_reason, COUNT(*) FROM surveillance_flags GROUP BY 1, 2 ORDER BY 3 DESC;"
+   docker compose exec redpanda rpk topic consume surveillance.flag --num 5
+   ```
+5. Neo4j: `MATCH (:Insider)-[r:TRADED]->(:Company {ticker:'AAPL'}) RETURN count(r)`.
+
 ## Live Feed: “Demo” vs real WebSocket
 
 The dashboard **Live Feed** uses **`NEXT_PUBLIC_WS_URL`** (e.g. `ws://localhost:8000`). When set, the UI connects to **`/ws/feed`** on the API and shows **Live**; events appear when the **contradiction-detector** publishes `contradiction.found` or the **celery-worker** publishes `surveillance.flag` to Kafka. When `NEXT_PUBLIC_WS_URL` is **unset** (e.g. local Next dev with mock routes only), the feed stays **Demo** sample data. Rebuild the dashboard image after changing WebSocket or API URL env vars.
