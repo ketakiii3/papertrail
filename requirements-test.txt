@@ -12,3 +12,8 @@ aiokafka>=0.11
 httpx>=0.27
 beautifulsoup4>=4.12
 lxml>=5.0
+# Checker agent (LangChain tool calling)
+langchain>=1.0,<2
+langchain-core>=1.0,<2
+langchain-ollama>=1.0,<2
+langgraph>=1.0,<2

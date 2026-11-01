@@ -45,7 +45,7 @@ Analysis:"""
 
 # Tags reserved for prompt structure; any occurrence in untrusted input is
 # neutralized so a hostile filing can't close the wrapper and inject instructions.
-_RESERVED_TAGS = ("claim_a", "claim_b", "company", "tool_trace")
+_RESERVED_TAGS = ("claim_a", "claim_b", "company", "tool_trace", "tool_result")
 
 
 def _neutralize_tags(text: str) -> str:

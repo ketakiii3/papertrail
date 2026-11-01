@@ -1,6 +1,6 @@
 # PaperTrail: plan for the fixes and real tool calling
 
-**Written:** 2026-10-30. **Status:** F0–F8 done on `fix/correctness` and in PR #1 (not merged); dev DB migrated, AAPL re-ingest check and F6 timing recorded in the worklog. E and T not started.
+**Written:** 2026-10-30. **Status:** F0–F8 merged (PR #1, 2026-11-01). T1–T4 built with LangChain on `agent/tool-calling` (2026-11-01, see the note at the top of §4). E1–E3, T5–T8 not started.
 **LLM decision (2026-10-30):** local only for now. Small models via Ollama, no hosted API. Default `qwen3:4b`; see §4.0.
 **Scope:** correctness fixes (F1–F8), a small evaluation set (E1–E3), and real LLM tool calling (T1–T8). Deployment is a separate decision; see `docs/deployment-options.md`. Everything here works with the existing Docker stack and doesn't depend on how it's deployed.
 **Log every session in `docs/worklog.md`** (template in §6).
@@ -187,6 +187,13 @@ The agent's job is to throw out false positives. Without labeled pairs there's n
 ---
 
 ## 4. Real tool calling
+
+> **Built 2026-11-01 with LangChain, not a hand-rolled loop** (Ketaki asked for a framework). What changed from the plan below:
+> - T1: no `shared/agent_loop.py`. The loop is LangChain 1.x `create_agent` (a LangGraph graph) on `ChatOllama`; the verdict is a `ToolStrategy` schema the model must submit as the `submit_verdict` tool; budgets are `ToolCallLimitMiddleware` + `ModelCallLimitMiddleware`. Code: `services/contradiction-detector/src/checker.py`.
+> - T2: 3 data tools (`get_claim_context`, `find_related_claims`, `get_insider_trades`); `get_price_move` skipped for now. Each is bound to the pair's company.
+> - T3: runs as its own Kafka consumer group (`contradiction-checkers`, service `contradiction-checker`) instead of a Celery task; same backpressure benefit, less machinery. Verdict labels add **`materialized_risk`** (hypothetical risk later reported as having happened: the Facebook 2018 / SEC 2019-140 pattern, which NLI scores neutral). Guardrails in code: severity forced to low unless real/materialized_risk; evidence citing tools that never ran is dropped; empty-string args mean "not given". Prompt `checker-v2`.
+> - T4: `agent_runs` keyed by `contradiction_id` (not claim ids); unique per (pair, model, prompt version) except error runs, so failures can be retried. `contradiction.verified` is published; graph-builder and the dashboard don't consume it yet. API: verdict fields on contradictions + `GET /api/v1/contradictions/{id}/trace`.
+> - Measured with local models (worklog 2026-11-01): mistral 7B never calls tools; llama3.2 3B does, but never submits a well-formed verdict (every run ends `forced`), and one tool-description change flipped its Facebook verdict from `materialized_risk` to `noise`. `qwen3:4b` not yet pulled. **T5 (eval) is what decides whether any of this beats the rules.**
 
 ### What changes
 Today `agent.py` runs `semantic_compare → check_negation → temporal_check → get_insider_context → severity_score` in a fixed order, then asks tinyllama for a paragraph. The model never picks a tool and can't change the outcome.

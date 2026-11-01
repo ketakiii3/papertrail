@@ -120,6 +120,26 @@ services:
     volumes:
       - ./shared:/app/shared
 
+  # LangChain tool-calling agent that re-checks each stored contradiction.
+  # Same image as the detector; its own consumer group, so slow local
+  # inference never holds up detection. Needs a tool-capable model
+  # (CHECKER_MODEL, default qwen3:4b), by default Ollama running natively on the host.
+  contradiction-checker:
+    build:
+      context: .
+      dockerfile: services/contradiction-detector/Dockerfile
+    command: python -m src.checker_main
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    env_file: .env
+    environment:
+      CHECKER_OLLAMA_URL: ${CHECKER_OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./shared:/app/shared
+
   graph-builder:
     build:
       context: .

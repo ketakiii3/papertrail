@@ -164,6 +164,20 @@ TEST_DATABASE_URL=postgresql://papertrail:papertrail@localhost:55432/postgres .v
 
 CI (`.github/workflows/ci.yml`) runs both, plus the dashboard lint + build.
 
+## Checker agent (LangChain tool calling)
+
+After the rules store a contradiction, the `contradiction-checker` service re-checks it with an LLM agent (LangChain `create_agent` on a local Ollama model). The model chooses among three read-only tools scoped to the pair's company (surrounding filing text, related claims, insider trades), at most `CHECKER_MAX_TOOL_CALLS` times, then must submit a structured verdict: `real`, `materialized_risk`, `update`, `boilerplate`, `scope` or `noise`. Every run's tool trace is stored in `agent_runs`; the verdict is copied onto the contradiction and published on `contradiction.verified`.
+
+```bash
+ollama pull qwen3:4b                                   # needs a tool-capable model; tinyllama isn't
+docker compose up -d contradiction-checker             # consumes contradiction.found
+docker compose run --rm --no-deps contradiction-checker python -m src.checker_main --id 12   # one pair
+curl http://localhost:8000/api/v1/contradictions/12/trace
+.venv/bin/python scripts/facebook_case.py qwen3:4b     # the SEC's Facebook 2018 case
+```
+
+Small local models are unreliable here (see `docs/worklog.md`, 2026-11-01); measure on the eval set before trusting verdicts.
+
 ## Viewing agent + tool logs
 
 ```bash
@@ -186,7 +200,7 @@ docker compose logs -f graph-builder            # Neo4j upserts
 │   └── api-server/             # FastAPI + WS fanout
 ├── shared/             # DB, Redis, Kafka, Celery, LLM helpers
 ├── infra/              # Postgres schema (init.sql) + migrations/
-├── scripts/            # Dev-only helpers (migrate.py, Kafka smoke test)
+├── scripts/            # Dev-only helpers (migrate.py, Kafka smoke test, facebook_case.py)
 ├── tests/              # Unit tests + tests/db (Postgres) + fixtures
 ├── docs/               # PRDs, build plan, Docker / API notes
 └── docker-compose.yml

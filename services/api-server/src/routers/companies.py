@@ -154,7 +154,7 @@ async def get_contradictions(
 
     query = """
         SELECT con.id, con.similarity_score, con.nli_contradiction_score,
-               con.severity, con.time_gap_days, con.explanation, con.agent_reasoning,
+               con.severity, con.time_gap_days, con.explanation, con.agent_reasoning, con.verdict, con.agent_confidence, con.agent_run_id,
                con.created_at,
                ca.id as ca_id, ca.filing_id as ca_filing_id, ca.claim_text as ca_text,
                ca.claim_type as ca_type, ca.topic as ca_topic, ca.sentiment as ca_sentiment,
@@ -214,6 +214,7 @@ async def get_contradictions(
             time_gap_days=r["time_gap_days"],
             explanation=r["explanation"],
             agent_reasoning=r["agent_reasoning"],
+            verdict=r["verdict"], agent_confidence=r["agent_confidence"], agent_run_id=r["agent_run_id"],
             created_at=r["created_at"],
         ))
 

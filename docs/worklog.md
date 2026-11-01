@@ -4,6 +4,36 @@ One dated entry per working session, newest first. Record what was done, command
 
 ---
 
+## 2026-11-01: PR #1 merged; checker agent with LangChain (T1–T4); Facebook case
+
+**Done**
+- Merged PR #1 (`fix/correctness`) into `main` (merge commit `6f8573c`). Auto-merge is disabled on the repo; merged once the only unchecked change was docs.
+- Branch `agent/tool-calling`: a real tool-calling agent. LangChain 1.x `create_agent` on `ChatOllama`, verdict as a `ToolStrategy` schema (`submit_verdict`), `ToolCallLimitMiddleware` (3) + `ModelCallLimitMiddleware`, forced structured-output fallback, 3 company-scoped read-only tools. New service `contradiction-checker` (own consumer group on `contradiction.found`), migration 003 (`agent_runs` + verdict columns), `contradiction.verified` topic, API verdict fields + `/contradictions/{id}/trace`, `scripts/facebook_case.py`.
+- New verdict label `materialized_risk` after testing the Facebook case (below).
+- Code guardrails added after the first real runs: severity forced low unless real/materialized_risk; evidence citing uncalled tools dropped; blank args treated as not given; topic values listed in the tool description. Prompt bumped to `checker-v2`.
+
+**Measured** (Apple M5 Max, native Ollama, temperature 0)
+- Both contradictions stored in the dev DB are false positives on reading them: Costco (NLI 0.81, "high") pairs an exhibit reference with an accounting-policy cross-reference; P&G (NLI 0.70) pairs a market-share sentence with an 8-K header, and tinyllama's narrative invented a reason it mattered.
+- Checker on those two: mistral 7B (v1 prompt) scope / noise, 0 tool calls, 21 s / 6 s; llama3.2 3B (v2) noise / noise, 3 / 1 tool calls, 3.3 s / 2.4 s. Rules severity was "high" for both. Every run ended `forced`: mistral answers in prose and never calls tools; llama3.2 calls tools but sends `submit_verdict` with only the label.
+- Facebook 2018 (SEC 2019-140): 10-K 2018-02-01 "users' data may be improperly accessed, used, or disclosed" vs 10-Q 2018-04-26 "the misuse of certain data by a developer". Claim filter drops both sentences; MiniLM cosine 0.72 (retrieval would find it); DeBERTa NLI neutral 1.00, contradiction 0.00. The 10-Q still repeats the 10-K sentence verbatim.
+- Checker on Facebook: llama3.2 read both contexts and answered `materialized_risk` with the first v2 tool descriptions; after adding the topic list to one tool description, 3/3 runs say `noise` (1 tool call). mistral: 3/3 `noise`, though its rationale says the risk materialized. Deterministic at temperature 0; brittle to wording.
+- Tests: 60 passed (12 checker unit tests with a scripted fake model, 2 checker DB tests).
+
+**Problems**
+- Ollama has no "tool call required" option, so a model that answers in prose can only be rescued by the forced structured-output call. The forced rate is a model-quality metric for T5.
+- `rpk topic consume --num N` blocks until N messages exist; use `timeout 5 rpk ...`.
+
+**Decisions**
+- LangChain over the hand-rolled loop in the plan (Ketaki's call). Kafka consumer group over Celery for the checker. `contradiction_id` as the agent_runs key.
+- Not tuning the prompt to the Facebook case: one example is a test case, not a training set.
+
+**Next**
+- `ollama pull qwen3:4b` and rerun the two stored pairs + `scripts/facebook_case.py`.
+- E1–E3: the labeled eval set, so T5 can say whether the checker beats the rules. Include materialized-risk pairs (Facebook, the 2024 SEC cyber cases).
+- T6: show verdict + trace in the dashboard; consume `contradiction.verified` in the API feed and graph-builder.
+
+---
+
 ## 2026-10-30 (later): Dev-DB migration, real Form 4 re-ingest, F6 timing
 
 **Done**

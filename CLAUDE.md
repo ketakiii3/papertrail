@@ -63,6 +63,7 @@ edgar-ingester    transcript-ingester              (Form 4 path)
 | `contradiction.found` | contradiction-detector | `graph-builders`, `api-ws-fanout` |
 | `insider.new` | edgar-ingester (Form 4) | `surveillance`, `graph-builders` |
 | `surveillance.flag` | celery-worker | `graph-builders`, `api-ws-fanout` |
+| `contradiction.verified` | contradiction-checker | (none yet) |
 
 Note: topic names diverge from the PRD spec (`claim.new`/`contradiction.new`) — original Redis-stream names were kept (`claims.extracted` / `contradiction.found`) to avoid migration churn. Delivery is at-least-once with manual commits; handlers must be idempotent.
 
@@ -129,6 +130,10 @@ Postgres extension `vector` is required; `pgvector/pgvector:pg16` provides it. E
 ---
 
 ## 4. The agent tool pipeline (contradiction detector)
+
+**Two stages since 2026-11-01.** (1) The rules pipeline below decides what to store. (2) The **checker agent** (`checker.py` + `checker_service.py`, service `contradiction-checker`, consumer group `contradiction-checkers`) re-checks each stored pair with LangChain `create_agent` + `ChatOllama` (`CHECKER_MODEL`, default `qwen3:4b`): tools `get_claim_context`, `find_related_claims`, `get_insider_trades`, verdict via `submit_verdict` (`ToolStrategy`), budgets via call-limit middleware, trace in `agent_runs`, verdict copied to `contradictions.verdict/agent_confidence/agent_run_id`, event `contradiction.verified`, API `GET /api/v1/contradictions/{id}/trace`. Prompt version `checker-v2`. Tests: `tests/test_checker.py` (scripted fake model), `tests/db/test_checker_runs.py`.
+
+The rules pipeline:
 
 `services/contradiction-detector/src/agent.py` orchestrates explicit tools in `agent_tools.py`. Visible logs are prefixed `[AGENT]` and `[AGENT_TOOL]`. Per pair:
 
